@@ -1,5 +1,5 @@
 import axios from "axios";
-import meta from "meta";
+
 const callToken = async () => {
   const accessToken = sessionStorage.getItem("accessToken");
 
@@ -10,13 +10,12 @@ const callToken = async () => {
 
   try {
     console.log("토큰이 없으므로 새로 발급 요청...");
-    const response = await axios.post(
-      meta.env.REACT_APP_API_BASE_URL + "/auth",
-      {
-        client_id: "client_id",
-        client_secret: "client_secret",
-      }
-    );
+    const baseURL =
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:8090";
+    const response = await axios.post(baseURL + "/auth", {
+      client_id: "client_id",
+      client_secret: "client_secret",
+    });
 
     if (response.status === 200) {
       const newToken = response.data.accessToken;
