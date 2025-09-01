@@ -31,6 +31,7 @@ pnpm install
 ```bash
 cp .env.example .env
 # 필요한 값 채우기
+>> ex) REACT_APP_API_BASE_URL=http://localhost:8080
 ```
 
 ### 5. 개발 서버 실행
