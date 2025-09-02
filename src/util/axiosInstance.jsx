@@ -1,10 +1,9 @@
 import axios from "axios";
 import callToken from "./callToken";
-import meta from "meta";
 
 // Axios 인스턴스 생성
 const axiosInstance = axios.create({
-  baseURL: meta.env.REACT_APP_API_BASE_URL, // API 기본 URL
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8090", // API 기본 URL
 });
 
 // 요청 인터셉터
