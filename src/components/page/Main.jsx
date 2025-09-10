@@ -22,6 +22,9 @@ const Main = () => {
     navigate("/register");
   };
 
+  const handleGoMypage = () => {
+    navigate("/mypage");
+  }
   const handleLogout = () => {
     const token = sessionStorage.getItem("accessToken");
     if (!token) return;
@@ -61,7 +64,11 @@ const Main = () => {
           회원가입 이동
         </Button>
       </div>
-
+<div className="mt-4">
+        <Button variant="confirm" onClick={handleGoMypage}>
+          마이페이지 이동
+        </Button>
+      </div>
       <div className="mt-4">
         <Button variant="destructive" onClick={handleLogout}>
           로그아웃

@@ -1,7 +1,7 @@
 const Header = () => {
     return(
       <div>
-        <header className="flex items-center justify-between mb-4">
+        <header className="flex items-center justify-between mb-4 px-4">
           <div className="text-xl font-bold text-[#FFFFFF]">Quant-Mate</div>
           <div className="flex items-center gap-3 text-lg">
             <button aria-label="night" className="p-2">🌙</button>
