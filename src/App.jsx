@@ -1,17 +1,22 @@
 import { Routes, Route } from "react-router-dom";
-import Main from "./component/Main";
-import Login from "./component/Login";
+import Main from "./components/page/Main";
+import Login from "./components/page/Login";
+import Register from "./components/page/Register";
+import Header from "./components/Header";
 
 function App() {
-  //const [count, setCount] = useState(0)
-
   return (
-    <div>
-      <h1>Hello World</h1>
-      <Routes>
-        <Route path="/" element={<Main />} />
-        <Route path="/login" element={<Login />} />
-      </Routes>
+    <div className="fixed inset-0 bg-sky-200 flex justify-center items-center">
+      <div className="bg-[#020618] w-full max-w-md  px-4 h-[100vh] flex flex-col">
+        <Header />
+        <div className=" overflow-y-auto hide-scrollbar px-4 flex flex-col ">
+          <Routes>
+            <Route path="/" element={<Main />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+          </Routes>
+        </div>
+      </div>
     </div>
   );
 }
