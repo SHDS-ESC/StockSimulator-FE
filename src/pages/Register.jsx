@@ -1,14 +1,26 @@
 import { useNavigate } from "react-router-dom";
-import { Input } from "../../components/ui/input";
-import { Button } from "../ui/button";
+import { Input } from "../components/ui/input";
+import { Button } from "../components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandGroup, CommandItem } from "@/components/ui/command";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCallback } from "react";
 import useRegisterStore from "@/store/useRegisterStore";
-import axios from 'axios';
+import axios from "axios";
 
 const interests = [
   { value: "light", label: "Light" },
@@ -17,38 +29,56 @@ const interests = [
 ];
 
 const Register = () => {
-  const { 
-    email, setEmail,
-    password, setPassword,
-    confirmPassword, setConfirmPassword,
-    level, setLevel,
-    tickerList, setTickerList,
-    error, setError 
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    confirmPassword,
+    setConfirmPassword,
+    level,
+    setLevel,
+    tickerList,
+    setTickerList,
+    error,
+    setError,
   } = useRegisterStore();
 
   const navigate = useNavigate();
 
   // useCallback으로 함수 최적화
-  const handleChange = useCallback((e) => {
-    const { name, value } = e.target;
-    if (name === "email") setEmail(value);
-    if (name === "password") setPassword(value);
-  }, [setEmail, setPassword]);
+  const handleChange = useCallback(
+    (e) => {
+      const { name, value } = e.target;
+      if (name === "email") setEmail(value);
+      if (name === "password") setPassword(value);
+    },
+    [setEmail, setPassword]
+  );
 
-  const handleLevelChange = useCallback((value) => {
-    setLevel(value);
-  }, [setLevel]);
+  const handleLevelChange = useCallback(
+    (value) => {
+      setLevel(value);
+    },
+    [setLevel]
+  );
 
-  const handleConfirmPasswordChange = useCallback((e) => {
-    setConfirmPassword(e.target.value);
-  }, [setConfirmPassword]);
+  const handleConfirmPasswordChange = useCallback(
+    (e) => {
+      setConfirmPassword(e.target.value);
+    },
+    [setConfirmPassword]
+  );
 
-  const handleTickerListChange = useCallback((value) => {
-    const newTickerList = tickerList.includes(value)
-      ? tickerList.filter((item) => item !== value)
-      : [...tickerList, value];
-    setTickerList(newTickerList);
-  }, [setTickerList, tickerList]);
+  const handleTickerListChange = useCallback(
+    (value) => {
+      const newTickerList = tickerList.includes(value)
+        ? tickerList.filter((item) => item !== value)
+        : [...tickerList, value];
+      setTickerList(newTickerList);
+    },
+    [setTickerList, tickerList]
+  );
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -61,7 +91,12 @@ const Register = () => {
     setError("");
     try {
       axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
-      const response = await axios.post("/auth/register", { email, password, level, tickerList });
+      const response = await axios.post("/auth/register", {
+        email,
+        password,
+        level,
+        tickerList,
+      });
       if (response.status === 200) {
         navigate("/login");
       } else {
