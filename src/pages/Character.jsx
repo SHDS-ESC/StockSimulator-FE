@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { X, ChevronLeft } from "lucide-react";
-import Header from "../component/Header";
-import BottomNav from "../component/BottomNav";
-
 const Character = () => {
   const navigate = useNavigate();
   const [newProfile, setNewProfile] = useState({
@@ -42,14 +39,6 @@ const Character = () => {
 
   return (
     <div className="bg-slate-950 w-full max-w-md mx-auto h-screen overflow-y-auto custom-scrollbar relative">
-      {/* 헤더 - 상단 고정 */}
-      <div
-        className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50"
-        style={{ height: "64px" }} // 헤더 높이 고정(예: 64px)
-      >
-        <Header />
-      </div>
-
       {/* 전체 콘텐츠 영역 - 헤더/푸터 높이만큼 패딩 */}
       <div
         className="overflow-y-auto"
@@ -166,14 +155,6 @@ const Character = () => {
             프로필 생성하기
           </button>
         </div>
-      </div>
-
-      {/* 하단 네비게이션 - 화면 맨 아래 고정 */}
-      <div
-        className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50"
-        style={{ height: "72px" }} // 푸터 높이 고정(예: 72px)
-      >
-        <BottomNav />
       </div>
     </div>
   );

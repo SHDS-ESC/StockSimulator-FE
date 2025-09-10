@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
-import Header from "../component/Header";
-import BottomNav from "../component/BottomNav";
-import StockListItem from "../component/StockListItem";
 
 const HomePage = () => {
   const navigate = useNavigate();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState("SSUNW");
-  const [favoriteStocks, setFavoriteStocks] = useState(new Set());
+  // const [favoriteStocks, setFavoriteStocks] = useState(new Set());
   const [profiles, setProfiles] = useState([
     {
       id: "SSUNW",
@@ -144,159 +141,148 @@ const HomePage = () => {
     checkForNewProfile();
   }, []);
 
-  const toggleFavorite = (stockSymbol) => {
-    setFavoriteStocks((prev) => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(stockSymbol)) {
-        newFavorites.delete(stockSymbol);
-      } else {
-        newFavorites.add(stockSymbol);
-      }
-      return newFavorites;
-    });
-  };
+  // const toggleFavorite = (stockSymbol) => {
+  //   setFavoriteStocks((prev) => {
+  //     const newFavorites = new Set(prev);
+  //     if (newFavorites.has(stockSymbol)) {
+  //       newFavorites.delete(stockSymbol);
+  //     } else {
+  //       newFavorites.add(stockSymbol);
+  //     }
+  //     return newFavorites;
+  //   });
+  // };
 
   return (
-    <div className="bg-slate-950 w-full max-w-md mx-auto h-screen overflow-y-auto custom-scrollbar">
-      {/* 헤더 - 상단 고정 */}
-      <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-        <Header />
-      </div>
-
+    <div className="h-full">
       {/* 전체 콘텐츠 영역 */}
-      <div className="pt-20 pb-20">
-        {/* 자산 정보 섹션 (다크 배경) */}
-        <div className="bg-slate-950 mx-4 rounded-xl p-1 mb-4">
-          {/* 프로필명 */}
-          <div className="mb-4">
-            <div
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={() => setIsProfileModalOpen(true)}
-            >
-              <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
-              <h2 className="text-white text-lg font-semibold">
-                {currentProfile?.name}
-              </h2>
-              <span className="text-gray-400 text-sm">
-                {currentProfile?.subtitle}
-              </span>
-            </div>
-          </div>
 
-          {/* 총 잔고 */}
-          <div className="mb-4">
-            <h3 className="text-white text-3xl font-bold">
-              {currentProfile?.balance}
-            </h3>
-            <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
-          </div>
-
-          {/* 투자/현금 정보 */}
-          <div className="flex justify-between mb-4">
-            <div>
-              <p className="text-gray-400 text-xs mb-1">투자</p>
-              <p className="text-white text-lg font-semibold">
-                {currentProfile?.totalAssets}
-              </p>
-            </div>
-            <div>
-              <p className="text-gray-400 text-xs mb-1">현금</p>
-              <p className="text-white text-lg font-semibold">
-                {currentProfile?.totalInvested}
-              </p>
-            </div>
-          </div>
-
-          {/* 주문 내역 */}
-          <div className="flex items-center justify-between">
-            <span className="text-white text-sm">주문 내역</span>
-            <ChevronRight className="w-4 h-4 text-white" />
+      {/* 자산 정보 섹션 (다크 배경) */}
+      <div className="bg-slate-950 mx-4 rounded-xl p-1 mb-4">
+        {/* 프로필명 */}
+        <div className="mb-4">
+          <div
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setIsProfileModalOpen(true)}
+          >
+            <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
+            <h2 className="text-white text-lg font-semibold">
+              {currentProfile?.name}
+            </h2>
+            <span className="text-gray-400 text-sm">
+              {currentProfile?.subtitle}
+            </span>
           </div>
         </div>
 
-        {/* 보유 주식 섹션 */}
-        <div className="bg-slate-950 px-4 py-2">
-          <div className="bg-slate-800 rounded-xl p-3">
-            <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
-            <div className="space-y-2">
-              {stocks.map((stock, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                      {stock.logo}
-                    </div>
-                    <div>
-                      <h4 className="text-white font-medium text-sm">
-                        {stock.name}
-                      </h4>
-                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-white font-semibold text-sm">
-                      {stock.price}
-                    </p>
-                    <p
-                      className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                    >
-                      {stock.change}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* 총 잔고 */}
+        <div className="mb-4">
+          <h3 className="text-white text-3xl font-bold">
+            {currentProfile?.balance}
+          </h3>
+          <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
+        </div>
+
+        {/* 투자/현금 정보 */}
+        <div className="flex justify-between mb-4">
+          <div>
+            <p className="text-gray-400 text-xs mb-1">투자</p>
+            <p className="text-white text-lg font-semibold">
+              {currentProfile?.totalAssets}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-400 text-xs mb-1">현금</p>
+            <p className="text-white text-lg font-semibold">
+              {currentProfile?.totalInvested}
+            </p>
           </div>
         </div>
 
-        {/* 실시간 급상승 종목 섹션 */}
-        <div className="bg-slate-950 px-4 py-2">
-          <div className="bg-slate-800 rounded-xl p-3">
-            <h3 className="text-white text-lg font-semibold mb-3">
-              실시간 급상승 종목
-            </h3>
-            <div className="space-y-2">
-              {stocks.slice(0, 3).map((stock, index) => (
-                <div
-                  key={`trending-${index}`}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                      {stock.logo}
-                    </div>
-                    <div>
-                      <h4 className="text-white font-medium text-sm">
-                        {stock.name}
-                      </h4>
-                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                    </div>
+        {/* 주문 내역 */}
+        <div className="flex items-center justify-between">
+          <span className="text-white text-sm">주문 내역</span>
+          <ChevronRight className="w-4 h-4 text-white" />
+        </div>
+      </div>
+
+      {/* 보유 주식 섹션 */}
+      <div className="bg-slate-950 px-4 py-2">
+        <div className="bg-slate-800 rounded-xl p-3">
+          <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
+          <div className="space-y-2">
+            {stocks.map((stock, index) => (
+              <div key={index} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
+                    {stock.logo}
                   </div>
-                  <div className="text-right">
-                    <p className="text-white font-semibold text-sm">
-                      {stock.price}
-                    </p>
-                    <p
-                      className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                    >
-                      {stock.change}
-                    </p>
+                  <div>
+                    <h4 className="text-white font-medium text-sm">
+                      {stock.name}
+                    </h4>
+                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
                   </div>
                 </div>
-              ))}
-            </div>
-            {/* 더 많은 주식목록보기 버튼 */}
-            <div className="mt-3 pt-3 border-t border-gray-200">
-              <button className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-gray-50 rounded-lg transition-colors">
-                더 많은 주식목록보기
-              </button>
-            </div>
+                <div className="text-right">
+                  <p className="text-white font-semibold text-sm">
+                    {stock.price}
+                  </p>
+                  <p
+                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
+                  >
+                    {stock.change}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* 하단 네비게이션 - 화면 맨 아래 고정 */}
-      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-        <BottomNav />
+      {/* 실시간 급상승 종목 섹션 */}
+      <div className="bg-slate-950 px-4 py-2">
+        <div className="bg-slate-800 rounded-xl p-3">
+          <h3 className="text-white text-lg font-semibold mb-3">
+            실시간 급상승 종목
+          </h3>
+          <div className="space-y-2">
+            {stocks.slice(0, 3).map((stock, index) => (
+              <div
+                key={`trending-${index}`}
+                className="flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
+                    {stock.logo}
+                  </div>
+                  <div>
+                    <h4 className="text-white font-medium text-sm">
+                      {stock.name}
+                    </h4>
+                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-white font-semibold text-sm">
+                    {stock.price}
+                  </p>
+                  <p
+                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
+                  >
+                    {stock.change}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* 더 많은 주식목록보기 버튼 */}
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <button className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-gray-50 rounded-lg transition-colors">
+              더 많은 주식목록보기
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 프로필 선택 모달 */}

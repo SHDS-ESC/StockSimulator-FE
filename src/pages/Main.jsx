@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import axiosInstance from "../../util/axiosInstance";
+import axiosInstance from "../util/axiosInstance";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 
@@ -24,7 +24,7 @@ const Main = () => {
 
   const handleGoMypage = () => {
     navigate("/mypage");
-  }
+  };
   const handleLogout = () => {
     const token = sessionStorage.getItem("accessToken");
     if (!token) return;
@@ -64,7 +64,7 @@ const Main = () => {
           회원가입 이동
         </Button>
       </div>
-<div className="mt-4">
+      <div className="mt-4">
         <Button variant="confirm" onClick={handleGoMypage}>
           마이페이지 이동
         </Button>

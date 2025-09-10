@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Search, X } from "lucide-react";
-import Header from "../component/Header";
-import BottomNav from "../component/BottomNav";
 
 const News = () => {
   const navigate = useNavigate();
@@ -148,14 +146,9 @@ const News = () => {
   );
 
   return (
-    <div className="bg-slate-950 w-full max-w-md mx-auto h-screen overflow-y-auto custom-scrollbar">
-      {/* 헤더 - 상단 고정 */}
-      <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-        <Header />
-      </div>
-
+    <div>
       {/* 전체 콘텐츠 영역 */}
-      <div className="pt-20 pb-20">
+      <div>
         {/* 뒤로가기 버튼 */}
         <div className="px-4 py-4">
           <button
@@ -327,11 +320,6 @@ const News = () => {
             </div>
           </div>
         )}
-      </div>
-
-      {/* 하단 네비게이션 - 화면 맨 아래 고정 */}
-      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-        <BottomNav />
       </div>
     </div>
   );

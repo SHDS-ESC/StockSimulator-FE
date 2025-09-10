@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import callToken from "../../util/callToken";
+import callToken from "../util/callToken";
 import { Input } from "@/components/ui/input";
-import { Button } from "../ui/button";
+import { Button } from "../components/ui/button";
 import { Label } from "@/components/ui/label";
 
 const Login = () => {
