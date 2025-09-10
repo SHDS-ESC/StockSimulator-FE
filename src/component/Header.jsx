@@ -16,7 +16,6 @@ const Header = () => {
         </div>
       </div>
       <h1 className="text-white text-lg font-bold">FINT</h1>
-
       <User className="w-6 h-6 text-white" />
     </div>
   );
