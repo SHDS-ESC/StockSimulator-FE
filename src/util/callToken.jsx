@@ -5,7 +5,7 @@ const callToken = async (email, password) => {
   try {
     console.log("토큰이 없으므로 새로 발급 요청...");
     const baseURL = 
-      import.meta.env.VITE_API_BASE_URL || "http://localhost:8090";
+      import.meta.env.VITE_API_BASE_URL || "http://localhost:8091";
     const response = await axios.post(
       baseURL + "/auth",
       {
