@@ -7,31 +7,9 @@ import {
   BotMessageSquare,
   Star,
   Newspaper,
-  User,
-  ChevronLeft,
 } from "lucide-react";
 
-// Header 컴포넌트
-export const Header = () => {
-  return (
-    <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-      <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer">
-            <div className="w-4 h-0.5 bg-white"></div>
-            <div className="w-4 h-0.5 bg-white"></div>
-            <div className="w-4 h-0.5 bg-white"></div>
-          </div>
-        </div>
-        <h1 className="text-white text-lg font-bold">FINT</h1>
-        <User className="w-6 h-6 text-white" />
-      </div>
-    </div>
-  );
-};
-
-// Footer (BottomNav) 컴포넌트
-export const Footer = () => {
+const BottomNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -113,38 +91,4 @@ export const Footer = () => {
   );
 };
 
-// PageHeader 컴포넌트
-export const PageHeader = ({ title, subtitle, children, className = "" }) => {
-  return (
-    <div className={`px-4 py-2 ${className}`}>
-      <h1 className="text-white text-2xl font-bold">{title}</h1>
-      {subtitle && (
-        <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
-      )}
-      {children}
-    </div>
-  );
-};
-
-// BackButton 컴포넌트
-export const BackButton = ({ onClick, className = "" }) => {
-  const navigate = useNavigate();
-
-  const handleClick = () => {
-    if (onClick) {
-      onClick();
-    } else {
-      navigate(-1);
-    }
-  };
-
-  return (
-    <button
-      onClick={handleClick}
-      className={`flex items-center gap-2 text-white hover:text-gray-300 transition-colors ${className}`}
-    >
-      <ChevronLeft className="w-5 h-5" />
-      <span>뒤로가기</span>
-    </button>
-  );
-};
+export default BottomNav;

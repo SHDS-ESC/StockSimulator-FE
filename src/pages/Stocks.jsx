@@ -134,12 +134,14 @@ const Stocks = () => {
     navigate("/");
   };
 
-  const goToSimulator = () => {
-    navigate("/trade");
-  };
-
   const handleStockSelect = (stock) => {
-    navigate(`/stocks/live/${stock.symbol}`);
+    if (selectedStocks.some((s) => s.symbol === stock.symbol)) {
+      setSelectedStocks(
+        selectedStocks.filter((s) => s.symbol !== stock.symbol)
+      );
+    } else {
+      setSelectedStocks([...selectedStocks, stock]);
+    }
   };
 
   const removeSelectedStock = (symbol) => {
@@ -169,10 +171,7 @@ const Stocks = () => {
 
         {/* 페이지 제목 */}
         <div className="px-4 py-2">
-          <div className="flex items-center justify-between">
-            <h1 className="text-white text-2xl font-bold">주식</h1>
-            <button onClick={goToSimulator} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500">시뮬레이터</button>
-          </div>
+          <h1 className="text-white text-2xl font-bold">주식</h1>
         </div>
 
         {/* 탭 메뉴 */}
