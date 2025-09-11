@@ -1,7 +1,8 @@
 import React from "react";
 import { Heart } from "lucide-react";
 
-const StockListItem = ({ stock, isFavorite, onToggleFavorite }) => {
+// StockListItem 컴포넌트
+export const StockListItem = ({ stock, isFavorite, onToggleFavorite }) => {
   const isPositive = stock.change.includes("+");
 
   return (
@@ -46,5 +47,3 @@ const StockListItem = ({ stock, isFavorite, onToggleFavorite }) => {
     </div>
   );
 };
-
-export default StockListItem;
