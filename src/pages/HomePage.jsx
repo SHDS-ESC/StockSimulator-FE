@@ -1,4 +1,4 @@
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
@@ -94,20 +94,6 @@ const handleProfileSelect = (profile) => {
   const handleCreateProfile = () => {
     // Character 페이지로 이동
     navigate("/character");
-  };
-
-  const addNewProfile = (newProfileData) => {
-    const newProfile = {
-      id: `PROFILE_${Date.now()}`, // 고유 ID 생성
-      name: newProfileData.nickname,
-      subtitle: `TimeLine : ${newProfileData.timeline}`,
-      balance: "$0.00", // 초기 잔고
-      totalAssets: "$0.00",
-      totalInvested: "$0.00",
-    };
-
-    setProfiles((prev) => [...prev, newProfile]);
-    setSelectedProfile(newProfile.id); // 새로 생성된 프로필을 선택
   };
 
   // const toggleFavorite = (stockSymbol) => {

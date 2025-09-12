@@ -18,8 +18,9 @@ axiosInstance.interceptors.request.use(
       if (token) {
         // Authorization 헤더에 토큰 추가
         config.headers.Authorization = `Bearer ${token}`;
+        console.log("토큰이 헤더에 추가되었습니다.");
       } else {
-        console.error("토큰을 가져올 수 없습니다.");
+        console.log("토큰이 없습니다. 로그인이 필요할 수 있습니다.");
       }
     } catch (error) {
       console.error("토큰 처리 중 오류 발생:", error);
