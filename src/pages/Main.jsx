@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import UnifiedChart from "./trade/UnifiedChart";
+import UnifiedChart from "../components/UnifiedChart";
 import { useStockData } from "../hooks/useStockData";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { useSimulation } from "../hooks/useSimulation";

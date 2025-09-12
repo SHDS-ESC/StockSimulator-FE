@@ -403,7 +403,7 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
 }
 
 // -------- TradingView Widget (kept) --------
-function RealtimeWidget({ symbol, theme = "light", autosize = true, interval = "60" }) {
+export function TradeRealtimeWidget({ symbol, theme = "light", autosize = true, interval = "60" }) {
   const wrapRef = useRef(null);
   const containerIdRef = useRef(`tv-container-${Math.random().toString(36).slice(2)}`);
 
@@ -468,7 +468,7 @@ function RealtimeWidget({ symbol, theme = "light", autosize = true, interval = "
 export default function UnifiedChart({ symbol, defaultMode = "historical", initialYear, initialMonth, initialDay, onCandlesLoaded, autoLoad }) {
   const [mode, setMode] = useState(defaultMode);
   const isHistorical = mode === "historical";
-  const Chart = useMemo(() => (isHistorical ? HistoricalChart : RealtimeWidget), [isHistorical]);
+  const Chart = useMemo(() => (isHistorical ? HistoricalChart : TradeRealtimeWidget), [isHistorical]);
   const chartKey = `${mode}-${symbol}`;
 
   return (
@@ -491,6 +491,4 @@ export default function UnifiedChart({ symbol, defaultMode = "historical", initi
     </div>
   );
 }
-
-
 

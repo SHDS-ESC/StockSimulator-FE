@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import UnifiedChart from "../../component/UnifiedChart";
+import UnifiedChart from "../../components/UnifiedChart";
 import axios from "../../util/axiosInstance";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";

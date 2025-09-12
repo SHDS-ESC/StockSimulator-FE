@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { TradeRealtimeWidget } from "./UnifiedChart";
+import { TradeRealtimeWidget } from "../../components/UnifiedChart";
 
 export default function StockLive() {
   const { symbol } = useParams();
