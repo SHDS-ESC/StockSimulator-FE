@@ -14,7 +14,7 @@ const badgeVariants = cva(
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive:
           "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
-        outline: "border-border bg-muted/30 text-foreground",
+        outline: "text-foreground",
         beginner:
           "border-transparent bg-green-500 text-white shadow hover:bg-green-600", // 초보 투자자
         intermediate:
@@ -35,4 +35,4 @@ function Badge({ className, variant, ...props }) {
   );
 }
 
-export { Badge };
+export { Badge, badgeVariants };
