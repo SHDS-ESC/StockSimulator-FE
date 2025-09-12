@@ -1,6 +1,5 @@
 import React from "react";
 // import { useNavigate, useLocation } from "react-router-dom";
-import { User } from "lucide-react";
 
 const Header = () => {
   // const navigate = useNavigate();
@@ -17,7 +16,6 @@ const Header = () => {
           </div>
         </div>
         <h1 className="text-white text-lg font-bold">FINT</h1>
-        <User className="w-6 h-6 text-white" />
       </div>
     </div>
   );

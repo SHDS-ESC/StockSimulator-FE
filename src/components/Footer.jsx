@@ -26,7 +26,7 @@ const BottomNav = () => {
   };
 
   const handleStarClick = () => {
-    navigate("/favorites");
+    navigate("/news");
   };
 
   const handleUserClick = () => {

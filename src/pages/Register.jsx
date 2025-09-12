@@ -91,7 +91,7 @@ const Register = () => {
     setError("");
     try {
       axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
-      const response = await axios.post("/auth/register", {
+      const response = await axios.post("/api/user/register", {
         email,
         password,
         level,
