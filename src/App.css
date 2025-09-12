@@ -1,0 +1,11 @@
+@import url("https://fonts.googleapis.com/css2?family=Gamja+Flower&family=Gothic+A1&family=Jua&display=swap");
+
+body {
+  background-color: #f6f6f6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: "Jua";
+  min-height: 100vh;
+  margin: 0px;
+}
