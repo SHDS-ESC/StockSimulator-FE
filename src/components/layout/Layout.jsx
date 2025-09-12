@@ -48,7 +48,7 @@ export const Footer = () => {
   };
 
   const handleStarClick = () => {
-    navigate("/favorites");
+    navigate("/news");
   };
 
   const handleUserClick = () => {
