@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { ChevronLeft, Search, X, Heart } from "lucide-react";
 
 const Stocks = () => {
@@ -135,14 +136,33 @@ const Stocks = () => {
     navigate("/");
   };
 
-  const handleStockSelect = (stock) => {
-    if (selectedStocks.some((s) => s.symbol === stock.symbol)) {
-      setSelectedStocks(
-        selectedStocks.filter((s) => s.symbol !== stock.symbol)
-      );
-    } else {
-      setSelectedStocks([...selectedStocks, stock]);
+  const [openSimModal, setOpenSimModal] = useState(false);
+  const today = useMemo(() => new Date(), []);
+  const [simY, setSimY] = useState(today.getFullYear());
+  const [simM, setSimM] = useState(today.getMonth() + 1);
+  const [simD, setSimD] = useState(today.getDate());
+  const [errMsg, setErrMsg] = useState("");
+
+  const goToSimulator = () => {
+    setErrMsg("");
+    setOpenSimModal(true);
+  };
+
+  const submitSim = () => {
+    const curYear = new Date().getFullYear();
+    const y = Math.max(1980, Math.min(curYear, Number(simY) || curYear));
+    const m = Math.max(1, Math.min(12, Number(simM) || 1));
+    const d = Math.max(1, Math.min(31, Number(simD) || 1));
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+      setErrMsg("유효한 날짜를 입력해주세요.");
+      return;
     }
+    setOpenSimModal(false);
+    navigate(`/trade?y=${y}&m=${m}&d=${d}`);
+  };
+
+  const handleStockSelect = (stock) => {
+    navigate(`/stocks/live/${stock.symbol}`);
   };
 
   const removeSelectedStock = (symbol) => {
@@ -171,10 +191,53 @@ const Stocks = () => {
     <div>
       {/* 전체 콘텐츠 영역 */}
       <div>
+        {/* 뒤로가기 버튼 */}
+        <div className="px-4 py-4">
+          <button
+            onClick={handleGoBack}
+            className="flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span>뒤로가기</span>
+          </button>
+        </div>
+
         {/* 페이지 제목 */}
         <div className="px-4 py-2">
-          <h1 className="text-white text-2xl font-bold">주식</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-white text-2xl font-bold">주식</h1>
+            <button onClick={goToSimulator} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500">시뮬레이터</button>
+          </div>
         </div>
+
+        {/* 시뮬레이터 날짜 선택 모달 */}
+        <Dialog open={openSimModal} onOpenChange={setOpenSimModal}>
+          <DialogContent className="bg-slate-900 text-white border border-slate-700">
+            <DialogHeader>
+              <DialogTitle>시뮬레이션 날짜 선택</DialogTitle>
+              <DialogDescription className="text-slate-400">과거 특정 날짜로 돌아가 시뮬레이션을 시작합니다.</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-3 gap-3 mt-2">
+              <div>
+                <label className="text-sm text-slate-300">연도(1980~현재)</label>
+                <input type="number" className="field w-full" value={simY} onChange={(e)=>setSimY(e.target.value)} min={1980} max={new Date().getFullYear()} />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300">월(1~12)</label>
+                <input type="number" className="field w-full" value={simM} onChange={(e)=>setSimM(e.target.value)} min={1} max={12} />
+              </div>
+              <div>
+                <label className="text-sm text-slate-300">일(1~31)</label>
+                <input type="number" className="field w-full" value={simD} onChange={(e)=>setSimD(e.target.value)} min={1} max={31} />
+              </div>
+            </div>
+            {errMsg && <div className="text-red-400 text-sm mt-2">{errMsg}</div>}
+            <div className="flex gap-2 justify-end mt-4">
+              <button className="px-3 py-2 bg-slate-800 rounded" onClick={()=>setOpenSimModal(false)}>취소</button>
+              <button className="px-3 py-2 bg-blue-600 rounded" onClick={submitSim}>시작</button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* 탭 메뉴 */}
         <div className="px-4 py-4">

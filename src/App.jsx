@@ -7,9 +7,10 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyPage from "./pages/Mypage";
 import Main from "./pages/Main";
-import Header from "./components/Header";
-import "./index.css"; // 2. Tailwind CSS를 적용하기 위해 CSS 파일을 불러옵니다.
-import Footer from "./components/Footer";
+import { Header, Footer } from "./components/layout/Layout";
+import "./index.css"; // Tailwind CSS + 모든 커스텀 스타일
+import TradePage from "./pages/trade/TradePage";
+import StockLive from "./pages/trade/StockLive";
 
 function App() {
   return (
@@ -18,7 +19,9 @@ function App() {
       <div className="bg-slate-950 w-full max-w-md  flex-1 flex flex-col">
         <div className="overflow-y-auto hide-scrollbar flex-1 pt-16 ">
           <Routes>
-            <Route path="/" element={<Main />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/trade" element={<TradePage />} />
+            <Route path="/stocks/live/:symbol" element={<StockLive />} />
             <Route path="/home" element={<HomePage />} />
             <Route path="/character" element={<Character />} />
             <Route path="/stocks" element={<Stocks />} />
