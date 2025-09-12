@@ -1,62 +1,48 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, use } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
+import axiosInstance from "@/util/axiosInstance";
 
 const HomePage = () => {
   const navigate = useNavigate();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState("SSUNW");
-  // const [favoriteStocks, setFavoriteStocks] = useState(new Set());
-  const [profiles, setProfiles] = useState([
-    {
-      id: "SSUNW",
-      name: "SSUNW",
-      subtitle: "TimeLine : 실시간",
-      balance: "$4,776.24",
-      totalAssets: "$2,266.24",
-      totalInvested: "$2,500.00",
-    },
-    {
-      id: "TRADING_PRO",
-      name: "Trading Pro",
-      subtitle: "Advanced Strategy",
-      balance: "$8,432.17",
-      totalAssets: "$5,200.89",
-      totalInvested: "$3,231.28",
-    },
-    {
-      id: "CONSERVATIVE",
-      name: "Conservative",
-      subtitle: "Low Risk Portfolio",
-      balance: "$12,156.91",
-      totalAssets: "$7,890.45",
-      totalInvested: "$4,266.46",
-    },
-    {
-      id: "CRYPTO_FOCUS",
-      name: "Crypto Focus",
-      subtitle: "Digital Assets Only",
-      balance: "$3,892.15",
-      totalAssets: "$2,100.33",
-      totalInvested: "$1,791.82",
-    },
-    {
-      id: "DAY_TRADER",
-      name: "Day Trader",
-      subtitle: "Short-term Scalping",
-      balance: "$6,421.67",
-      totalAssets: "$3,888.90",
-      totalInvested: "$2,532.77",
-    },
-    {
-      id: "SWING_MASTER",
-      name: "Swing Master",
-      subtitle: "Medium-term Holdings",
-      balance: "$15,892.34",
-      totalAssets: "$9,455.12",
-      totalInvested: "$6,437.22",
-    },
-  ]);
+  const [selectedProfile, setSelectedProfile] = useState({
+    id: 0,
+    totalInvested: 0,
+    totalAssets: 0,
+    cashBalance: 0,
+    nickname: "프로필을 선택해주세요",
+    state: true,
+  });
+
+  const [profiles, setProfiles] = useState([]);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const nickname = selectedProfile?.nickname
+          ? `/${selectedProfile.nickname}`
+          : "";
+        const response = await axiosInstance.get(
+          `userprofile/profiles${nickname}`,
+          { withCredentials: true }
+        );
+
+        setProfiles(response.data);
+
+        // state가 true인 프로필 선택, 없으면 첫 번째 선택
+        const activeProfile =
+          response.data.find((p) => p.state) || response.data[0];
+        setSelectedProfile(activeProfile);
+
+        localStorage.setItem("newProfile", JSON.stringify(activeProfile));
+      } catch (error) {
+        console.error("Error fetching profiles:", error);
+      }
+    };
+
+    fetchProfiles();
+  }, []);
 
   const stocks = [
     {
@@ -100,13 +86,10 @@ const HomePage = () => {
       logo: "🎮",
     },
   ];
-
-  const currentProfile = profiles.find((p) => p.id === selectedProfile);
-
-  const handleProfileSelect = (profileId) => {
-    setSelectedProfile(profileId);
-    setTimeout(() => setIsProfileModalOpen(false), 200);
-  };
+const handleProfileSelect = (profile) => {
+  setSelectedProfile(profile);
+  setTimeout(() => setIsProfileModalOpen(false), 200);
+};
 
   const handleCreateProfile = () => {
     // Character 페이지로 이동
@@ -127,20 +110,6 @@ const HomePage = () => {
     setSelectedProfile(newProfile.id); // 새로 생성된 프로필을 선택
   };
 
-  // localStorage에서 새 프로필 확인
-  useEffect(() => {
-    const checkForNewProfile = () => {
-      const newProfileData = localStorage.getItem("newProfile");
-      if (newProfileData) {
-        const profileData = JSON.parse(newProfileData);
-        addNewProfile(profileData);
-        localStorage.removeItem("newProfile"); // 사용 후 제거
-      }
-    };
-
-    checkForNewProfile();
-  }, []);
-
   // const toggleFavorite = (stockSymbol) => {
   //   setFavoriteStocks((prev) => {
   //     const newFavorites = new Set(prev);
@@ -154,7 +123,7 @@ const HomePage = () => {
   // };
 
   return (
-    <div className="h-full">
+    <div className="h-full pt-10 pb-10">
       {/* 전체 콘텐츠 영역 */}
 
       {/* 자산 정보 섹션 (다크 배경) */}
@@ -167,10 +136,12 @@ const HomePage = () => {
           >
             <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
             <h2 className="text-white text-lg font-semibold">
-              {currentProfile?.name}
+              {selectedProfile?.nickname}
             </h2>
             <span className="text-gray-400 text-sm">
-              {currentProfile?.subtitle}
+              {selectedProfile
+                ? "TimeLine : 실시간 "
+                : "TimeLine : 없음"}
             </span>
           </div>
         </div>
@@ -178,7 +149,7 @@ const HomePage = () => {
         {/* 총 잔고 */}
         <div className="mb-4">
           <h3 className="text-white text-3xl font-bold">
-            {currentProfile?.balance}
+            {selectedProfile?.balance}
           </h3>
           <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
         </div>
@@ -188,13 +159,13 @@ const HomePage = () => {
           <div>
             <p className="text-gray-400 text-xs mb-1">투자</p>
             <p className="text-white text-lg font-semibold">
-              {currentProfile?.totalAssets}
+              {selectedProfile?.totalAssets}
             </p>
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-1">현금</p>
             <p className="text-white text-lg font-semibold">
-              {currentProfile?.totalInvested}
+              {selectedProfile?.totalInvested}
             </p>
           </div>
         </div>
@@ -318,38 +289,36 @@ const HomePage = () => {
               {profiles.map((profile) => (
                 <div
                   key={profile.id}
-                  onClick={() => handleProfileSelect(profile.id)}
-                  className={`
-                    p-4 rounded-2xl border cursor-pointer transition-all duration-200 active:scale-[0.98] touch-manipulation
-                    ${
-                      profile.id === selectedProfile
-                        ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
-                        : "bg-slate-800 border-slate-700"
-                    }
-                  `}
+                  onClick={() => handleProfileSelect(profile)}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200
+      ${
+        profile.id === selectedProfile.id
+          ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
+          : "bg-slate-800 border-slate-700"
+      }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3">
-                        {profile.id === selectedProfile && (
+                        {profile.id === selectedProfile.id && (
                           <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                         )}
                         <h4 className="text-white font-semibold text-base">
-                          {profile.name}
+                          {profile.nickname}
                         </h4>
-                        {profile.id === selectedProfile && (
+                        {profile.id === selectedProfile.id && (
                           <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium">
                             활성
                           </span>
                         )}
                       </div>
                       <p className="text-gray-400 text-sm mt-1">
-                        {profile.subtitle}
+                        서브타이틀
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
-                        {profile.balance}
+                        {profile.cashBalance}
                       </p>
                       <p className="text-gray-400 text-xs">총자산</p>
                     </div>
