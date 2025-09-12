@@ -39,7 +39,7 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full bg-[url('/logo.svg')] bg-cover bg-center bg-no-repeat flex items-center justify-center p-4">
+    <div className="h-full w-full bg-[url('/logo.svg')] bg-cover bg-center bg-no-repeat flex items-center justify-center ps-4 pe-4">
       <div className="w-full max-w-md">
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2 mt-60">

@@ -1,4 +1,6 @@
 import { useNavigate } from "react-router-dom";
+import axiosInstance from "../util/axiosInstance";
+import useLoginStore from "@/store/useLoginStore";
 import { useState, useEffect } from "react";
 import UnifiedChart from "../components/UnifiedChart";
 import { useStockData } from "../hooks/useStockData";
@@ -13,21 +15,14 @@ import { getCurrentDate } from "../util/dateUtils";
 
 const Main = () => {
   const navigate = useNavigate();
+  const { setEmail, setLevel, setTickerList,  setUpdatedAt } = useLoginStore(); //clear 추가
 
   // 커스텀 훅들 사용
-  const { 
-    query, 
-    setQuery, 
-    showPicker, 
-    setShowPicker, 
-    filteredTickers 
-  } = useStockData();
-  
-  const { 
-    watchlist, 
-    toggleWatchlist 
-  } = useWatchlist();
-  
+  const { query, setQuery, showPicker, setShowPicker, filteredTickers } =
+    useStockData();
+
+  const { watchlist, toggleWatchlist } = useWatchlist();
+
   const {
     simCandles,
     simIndex,
@@ -38,7 +33,7 @@ const Main = () => {
     handleEndTurn,
     confirmEndTurn,
     cancelEndTurn,
-    updateSimulation
+    updateSimulation,
   } = useSimulation();
 
   // 로컬 상태
@@ -56,14 +51,59 @@ const Main = () => {
     setSymbol(selectedSymbol);
   };
 
+
+  // const handleLogout = async () => {
+  //   const token = sessionStorage.getItem("accessToken");
+  //   if (!token) {
+  //     clear();
+  //     navigate("/login");
+  //     return;
+  //   }
+
+  //   // 먼저 서버 로그아웃 요청을 완료하고
+  //   try {
+  //     await axios.post("http://localhost:8090/api/user/logout", null, {
+  //       withCredentials: true,
+  //       headers: { Authorization: `Bearer ${token}` },
+  //     });
+  //   } catch (e) {
+  //     console.log("logout error", e); // 에러는 로그로 남기고 무시
+  //   } finally {
+  //     // 그 다음 클라이언트 상태/토큰 제거 후 로그인으로 이동
+  //     clear();
+  //     sessionStorage.removeItem("accessToken");
+  //     navigate("/login");
+  //   }
+  // };
+  useEffect(() => {
+    // 토큰이 없으면 사용자 정보 조회를 건너뜀 (토큰이 재저장되는 문제 방지)
+    const token = sessionStorage.getItem("accessToken");
+    if (!token) return;
+
+    axiosInstance.get("/user/me").then((response) => {
+      console.log(response.data);
+      setEmail(response.data.email ?? response.data.username);
+      setLevel(response.data.level);
+      setTickerList(response.data.tickerList);
+      setUpdatedAt(new Date().toISOString());
+    });
+  }, [setEmail, setLevel, setTickerList, setUpdatedAt]);
   // 시뮬레이션 진행 시 날짜 자동 업데이트
   const handleConfirmEndTurn = () => {
     confirmEndTurn();
     // 다음 날로 진행 시 날짜도 자동 업데이트
     const nextIndex = simIndex + 1;
-    const bar = (simCandles && nextIndex >= 0 && nextIndex < simCandles.length) ? simCandles[nextIndex] : null;
+    const bar =
+      simCandles && nextIndex >= 0 && nextIndex < simCandles.length
+        ? simCandles[nextIndex]
+        : null;
     const t = bar?.time;
-    if (t && Number.isFinite(t.year) && Number.isFinite(t.month) && Number.isFinite(t.day)) {
+    if (
+      t &&
+      Number.isFinite(t.year) &&
+      Number.isFinite(t.month) &&
+      Number.isFinite(t.day)
+    ) {
       setSelYear(t.year);
       setSelMonth(t.month);
       setSelDay(t.day);
@@ -74,8 +114,8 @@ const Main = () => {
   useEffect(() => {
     const selectors = [
       '[id^="tv-container-"]',
-      '.tradingview-widget-container',
-      '.tradingview-widget-copyright'
+      ".tradingview-widget-container",
+      ".tradingview-widget-copyright",
     ];
     selectors.forEach((sel) => {
       document.querySelectorAll(sel).forEach((el) => el.remove());
@@ -88,18 +128,22 @@ const Main = () => {
       <div className="row space" style={{ marginBottom: 14 }}>
         <div className="row" style={{ gap: 10 }}>
           <strong style={{ fontSize: 18 }}>Stock Simulator</strong>
-          <button className="btn brand" onClick={() => setShowPicker(true)}>종목 선택</button>
-          <span className="muted">선택됨: {symbol || '-'}</span>
+          <button className="btn brand" onClick={() => setShowPicker(true)}>
+            종목 선택
+          </button>
+          <span className="muted">선택됨: {symbol || "-"}</span>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn" onClick={handleGoToLogin}>로그인</button>
+          <button className="btn" onClick={handleGoToLogin}>
+            로그인
+          </button>
         </div>
       </div>
 
       {/* 관심 종목 패널 */}
-      <WatchlistPanel 
-        watchlist={watchlist} 
-        onSymbolSelect={handleSymbolSelect} 
+      <WatchlistPanel
+        watchlist={watchlist}
+        onSymbolSelect={handleSymbolSelect}
       />
 
       {/* 시뮬레이션 컨트롤 */}
