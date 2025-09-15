@@ -8,11 +8,13 @@ const useLoginStore = create(
       email: "",
       level: "",
       tickerList: [],
+      lastProfileId: 0,
       setUpdatedAt: (updatedAt) => set({ updatedAt }),
       setEmail: (email) => set({ email }),
       setLevel: (level) => set({ level }),
       setTickerList: (tickerList) => set({ tickerList }),
-      clear: () => set({ email: "", level: "", tickerList: [] }),
+      setLastProfileId: (lastProfileId) => set({ lastProfileId }),
+      clear: () => set({ email: "", level: "", tickerList: [], lastProfileId: 0 }),
     }),
     {
       name: 'login-store',
@@ -22,6 +24,7 @@ const useLoginStore = create(
         email: state.email,
         level: state.level,
         tickerList: state.tickerList,
+        lastProfileNickname: state.lastProfileNickname,
       }),
     }
   )
