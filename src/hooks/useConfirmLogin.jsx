@@ -18,9 +18,11 @@ const useConfirmLogin = (page) => {
         }
       })
       .catch((error) => {
-        console.log("로그인 상태 아님:", error);
+        if (page !== "login") {
+          console.log("로그인 상태 아님:", error);
           alert("로그인 한 유저만 접근할 수 있습니다.");
           navigate("/"); // 홈 페이지로 이동
+        }
       });
   }, [page, navigate]);
 };
