@@ -60,11 +60,11 @@ const HomePage = () => {
     axiosInstance
       .post(
         `userprofile/select`,
-        { userProfileId: lastProfileId, email: email },
+        { userProfileId: profile.id, email: email },
         { withCredentials: true }
       )
       .then((res) => {
-        console.log("프로필 선택 성공:", res.data);
+        console.log("프로필 선택 성공:", res.data.id);
         setSelectedProfile(profile);
         useLoginStore.setState({ lastProfileId: profile.id });
         setTimeout(() => setIsProfileModalOpen(false), 200);

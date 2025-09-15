@@ -17,7 +17,7 @@ import { Button} from "@/components/ui/button";
 
 const Main = () => {
   const navigate = useNavigate();
-  const { clear, setEmail, setLevel, setTickerList, setLastProfileNickname, setUpdatedAt } = useLoginStore();
+  const { clear, setEmail, setLevel, setTickerList, setLastProfileId, setUpdatedAt } = useLoginStore();
 
   // 커스텀 훅들 사용
   const { query, setQuery, showPicker, setShowPicker, filteredTickers } =
@@ -87,10 +87,10 @@ const Main = () => {
       setEmail(response.data.email ?? response.data.username);
       setLevel(response.data.level);
       setTickerList(response.data.tickerList);
-      setLastProfileNickname(response.data.lastProfileNickname);
+      setLastProfileId(response.data.lastProfileId);
       setUpdatedAt(new Date().toISOString());
     });
-  }, [setEmail, setLevel, setTickerList, setLastProfileNickname,  setUpdatedAt]);
+  }, [setEmail, setLevel, setTickerList, setLastProfileId, setUpdatedAt]);
   // 시뮬레이션 진행 시 날짜 자동 업데이트
   const handleConfirmEndTurn = () => {
     confirmEndTurn();

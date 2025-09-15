@@ -24,7 +24,7 @@ const useLoginStore = create(
         email: state.email,
         level: state.level,
         tickerList: state.tickerList,
-        lastProfileNickname: state.lastProfileNickname,
+        lastProfileId: state.lastProfileId,
       }),
     }
   )
