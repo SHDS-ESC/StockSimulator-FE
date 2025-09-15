@@ -2,10 +2,17 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
+import useLoginStore from "@/store/useLoginStore";
+import useConfirmLogin from "../hooks/useConfirmLogin";
 
 const HomePage = () => {
+  useConfirmLogin(null);
   const navigate = useNavigate();
+
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const {email} = useLoginStore();
+  
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
     totalInvested: 0,
@@ -15,16 +22,11 @@ const HomePage = () => {
     state: true,
   });
 
-  const [profiles, setProfiles] = useState([]);
-
   useEffect(() => {
     const fetchProfiles = async () => {
       try {
-        const nickname = selectedProfile?.nickname
-          ? `/${selectedProfile.nickname}`
-          : "";
         const response = await axiosInstance.get(
-          `userprofile/profiles${nickname}`,
+          `userprofile/profiles/${email}`,
           { withCredentials: true }
         );
 
@@ -34,7 +36,7 @@ const HomePage = () => {
         const activeProfile =
           response.data.find((p) => p.state) || response.data[0];
         setSelectedProfile(activeProfile);
-
+        console.log("activeProfile", response.data);
         localStorage.setItem("newProfile", JSON.stringify(activeProfile));
       } catch (error) {
         console.error("Error fetching profiles:", error);
@@ -42,7 +44,16 @@ const HomePage = () => {
     };
 
     fetchProfiles();
-  }, []);
+  }, [selectedProfile.id, email]);
+
+const handleProfileSelect = (profile) => {
+  axiosInstance.post(`userprofile/select`, { userProfileId: profile.id, email : email }, { withCredentials: true })
+    .then((res) => {
+      console.log("프로필 선택 성공:", res.data);
+      setSelectedProfile(profile);
+      setTimeout(() => setIsProfileModalOpen(false), 200);
+    }); 
+};
 
   const stocks = [
     {
@@ -86,10 +97,6 @@ const HomePage = () => {
       logo: "🎮",
     },
   ];
-const handleProfileSelect = (profile) => {
-  setSelectedProfile(profile);
-  setTimeout(() => setIsProfileModalOpen(false), 200);
-};
 
   const handleCreateProfile = () => {
     // Character 페이지로 이동
@@ -126,7 +133,7 @@ const handleProfileSelect = (profile) => {
             </h2>
             <span className="text-gray-400 text-sm">
               {selectedProfile
-                ? "TimeLine : 실시간 "
+                ? "TimeLine : " + selectedProfile.name
                 : "TimeLine : 없음"}
             </span>
           </div>
@@ -135,7 +142,7 @@ const handleProfileSelect = (profile) => {
         {/* 총 잔고 */}
         <div className="mb-4">
           <h3 className="text-white text-3xl font-bold">
-            {selectedProfile?.balance}
+          $  {selectedProfile?.cashBalance}
           </h3>
           <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
         </div>
@@ -145,13 +152,13 @@ const handleProfileSelect = (profile) => {
           <div>
             <p className="text-gray-400 text-xs mb-1">투자</p>
             <p className="text-white text-lg font-semibold">
-              {selectedProfile?.totalAssets}
+              $ {selectedProfile?.totalAssets}
             </p>
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-1">현금</p>
             <p className="text-white text-lg font-semibold">
-              {selectedProfile?.totalInvested}
+              $ {selectedProfile?.totalInvested}
             </p>
           </div>
         </div>
@@ -304,7 +311,7 @@ const handleProfileSelect = (profile) => {
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
-                        {profile.cashBalance}
+                        $ {profile.cashBalance}
                       </p>
                       <p className="text-gray-400 text-xs">총자산</p>
                     </div>

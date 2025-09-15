@@ -12,8 +12,10 @@ import {
 import useTimeLineStore from "@/store/useTimeLineStore";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
+import useConfirmLogin from "../hooks/useConfirmLogin";
 
 const Character = () => {
+  useConfirmLogin(null);
   const navigate = useNavigate();
   const { email } = useLoginStore();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
