@@ -17,9 +17,9 @@ function App() {
     <div className="min-h-screen bg-gray-100 flex flex-col items-center font-['Jua']">
       <Header />
       <div className="bg-slate-950 w-full max-w-md  flex-1 flex flex-col">
-        <div className="overflow-y-auto hide-scrollbar flex-1 pt-16 ">
+        <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative">
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<Main />} /> 
             <Route path="/trade" element={<TradePage />} />
             <Route path="/stocks/live/:symbol" element={<StockLive />} />
             <Route path="/home" element={<HomePage />} />
