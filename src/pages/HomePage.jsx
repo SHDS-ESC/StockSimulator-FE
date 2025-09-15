@@ -33,8 +33,7 @@ const HomePage = () => {
         setProfiles(response.data);
 
         // state가 true인 프로필 선택, 없으면 첫 번째 선택
-        const activeProfile =
-          response.data.find((p) => p.state) || response.data[0];
+        const activeProfile = response.data.find((p) => p.state) || selectedProfile;
         setSelectedProfile(activeProfile);
         console.log("activeProfile", response.data);
         localStorage.setItem("newProfile", JSON.stringify(activeProfile));
