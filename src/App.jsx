@@ -15,7 +15,7 @@ import StockLive from "./pages/trade/StockLive";
 function App() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center font-['Jua']">
-      <Header />
+        <Header />
       <div className="bg-slate-950 w-full max-w-md  flex-1 flex flex-col">
         <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative">
           <Routes>

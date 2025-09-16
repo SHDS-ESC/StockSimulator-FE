@@ -6,12 +6,11 @@ import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
 
 const HomePage = () => {
-  useConfirmLogin(null);
   const navigate = useNavigate();
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const { email } = useLoginStore();
+  const { email, lastProfileId } = useLoginStore();
 
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
@@ -22,30 +21,40 @@ const HomePage = () => {
     state: true,
   });
 
-  useEffect(() => {
-    const fetchProfiles = async () => {
+  useConfirmLogin(null);
+  // 초기 프로필 로드
+  const loadProfile = async () => {
+    fetchProfiles();
       try {
         const response = await axiosInstance.get(
-          `userprofile/profiles/${email}`,
+          `userprofile/profile/${lastProfileId}`,
           { withCredentials: true }
         );
-
-        setProfiles(response.data);
-
-        // state가 true인 프로필 선택, 없으면 첫 번째 선택
-        const activeProfile =
-          response.data.find((p) => p.state) || response.data[0];
-        setSelectedProfile(activeProfile);
+        setSelectedProfile(response.data);
         console.log("activeProfile", response.data);
-        localStorage.setItem("newProfile", JSON.stringify(activeProfile));
+        localStorage.setItem("newProfile", JSON.stringify(response.data));
       } catch (error) {
         console.error("Error fetching profiles:", error);
       }
-    };
+  };
 
-    fetchProfiles();
-  }, [selectedProfile.id, email]);
+  // 모든 프로필 불러오기
+  const fetchProfiles = async () => {
+    try {
+      const response = await axiosInstance.get(
+        `userprofile/profiles/${email}`,
+        { withCredentials: true }
+      );
+      setProfiles(response.data);
+    } catch (error) {
+      console.error("Error fetching profiles:", error);
+    }
+  };
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
+  // 프로필 선택
   const handleProfileSelect = (profile) => {
     axiosInstance
       .post(
@@ -54,8 +63,9 @@ const HomePage = () => {
         { withCredentials: true }
       )
       .then((res) => {
-        console.log("프로필 선택 성공:", res.data);
+        console.log("프로필 선택 성공:", res.data.id);
         setSelectedProfile(profile);
+        useLoginStore.setState({ lastProfileId: profile.id });
         setTimeout(() => setIsProfileModalOpen(false), 200);
       });
   };
@@ -137,7 +147,7 @@ const HomePage = () => {
               {selectedProfile?.nickname}
             </h2>
             <span className="text-gray-400 text-sm">
-              {selectedProfile
+              {selectedProfile  
                 ? "TimeLine : " + selectedProfile.name
                 : "TimeLine : 없음"}
             </span>
