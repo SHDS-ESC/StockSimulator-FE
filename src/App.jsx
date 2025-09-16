@@ -11,6 +11,7 @@ import { Header, Footer } from "./components/layout/Layout";
 import "./index.css"; // Tailwind CSS + 모든 커스텀 스타일
 import TradePage from "./pages/trade/TradePage";
 import StockLive from "./pages/trade/StockLive";
+import RedisTest from "./pages/RedisTest";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/mypage" element={<MyPage />} />
+        <Route path="/redis-test" element={<RedisTest />} />
           </Routes>
         </div>
       </div>

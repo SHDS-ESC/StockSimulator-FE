@@ -33,7 +33,7 @@ export default function TradePage() {
     let mounted = true;
     (async () => {
       try {
-        const res = await axios.get("/api/db/symbols");
+        const res = await axios.get("/db/symbols");
         const list = res?.data?.symbols || [];
         if (mounted) setSymbols(list);
       } catch (_) {
@@ -48,7 +48,7 @@ export default function TradePage() {
     let mounted = true;
     (async () => {
       try {
-        const res = await axios.get("/api/watchlist");
+        const res = await axios.get("/watchlist");
         const list = res?.data?.tickers || [];
         if (mounted) setWatchlist(list);
       } catch (_) {
@@ -83,10 +83,10 @@ export default function TradePage() {
   const toggleWatch = async (t) => {
     try {
       if (isWatched(t)) {
-        await axios.delete("/api/watchlist/remove", { params: { ticker: t } });
+        await axios.delete("/watchlist/remove", { params: { ticker: t } });
         setWatchlist(prev => prev.filter(x => x !== t));
       } else {
-        await axios.post("/api/watchlist/add", null, { params: { ticker: t } });
+        await axios.post("/watchlist/add", null, { params: { ticker: t } });
         setWatchlist(prev => [...prev, t]);
       }
     } catch (_) {}
@@ -111,8 +111,8 @@ export default function TradePage() {
         const prevTo = prevEpoch;
 
         const [curRes, prevRes] = await Promise.all([
-          axios.get('/api/db/candles', { params: { ticker: symbol, from: curFrom, to: curTo } }),
-          axios.get('/api/db/candles', { params: { ticker: symbol, from: prevFrom, to: prevTo } }),
+          axios.get('/db/candles', { params: { ticker: symbol, from: curFrom, to: curTo } }),
+          axios.get('/db/candles', { params: { ticker: symbol, from: prevFrom, to: prevTo } }),
         ]);
 
         const curT = curRes?.data?.t || [];

@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { TradeRealtimeWidget } from "../../components/UnifiedChart";
+import axiosInstance from "../../util/axiosInstance";
 
 export default function StockLive() {
   const { symbol } = useParams();
@@ -21,45 +22,24 @@ export default function StockLive() {
 
   useEffect(() => {
     let timer = null;
-    const API = import.meta.env.VITE_QUOTE_API;
-    if (!API || !s) { setErr('API 미설정 또는 심볼 없음'); setPrice(null); setPrevClose(null); return; }
-    const fetchOnce = async () => {
+    if (!s) { setErr('심볼 없음'); setPrice(null); setPrevClose(null); return; }
+    const fetchFromRedis = async () => {
       try {
-        let url = API;
-        if (url.includes('{symbol}')) {
-          url = url.replace('{symbol}', encodeURIComponent(s));
-        } else if (url.includes('?')) {
-          url = `${url}&symbol=${encodeURIComponent(s)}`;
-        } else {
-          url = `${url}?symbol=${encodeURIComponent(s)}`;
-        }
-        // 불필요한 Content-Type 헤더를 제거하여 CORS preflight를 방지
-        const res = await fetch(url);
-        const data = await res.json().catch(() => ({}));
-        // 다양한 포맷 대응 (finnhub, alphavantage, 임의 백엔드 등)
-        let cur = null, prev = null;
-        if (data && typeof data === 'object') {
-          if (Number.isFinite(Number(data.c)) || Number.isFinite(Number(data.pc))) { // finnhub
-            cur = Number(data.c);
-            prev = Number(data.pc);
-          } else if (data['Global Quote']) { // alpha vantage
-            cur = Number(data['Global Quote']['05. price']);
-            prev = Number(data['Global Quote']['08. previous close']);
-          } else if (Number.isFinite(Number(data.price)) || Number.isFinite(Number(data.prevClose))) {
-            cur = Number(data.price); prev = Number(data.prevClose);
-          } else if (data.quote) {
-            cur = Number(data.quote.price); prev = Number(data.quote.prevClose);
-          }
-        }
-        if (Number.isFinite(cur)) setPrice(cur); else setPrice(null);
-        if (Number.isFinite(prev)) setPrevClose(prev); else setPrevClose(null);
+        const res = await axiosInstance.get(`/market/redis/stock/${s}`);
+        const data = res?.data;
+        if (!data) { setErr('데이터 없음'); return; }
+        const cur = parseFloat(String(data.price || '').replace('$',''));
+        const chg = parseFloat(String(data.change || '').replace('+',''));
+        const prev = Number.isFinite(cur) && Number.isFinite(chg) ? (cur - chg) : null;
+        setPrice(Number.isFinite(cur) ? cur : null);
+        setPrevClose(Number.isFinite(prev) ? prev : null);
         setErr(null);
-      } catch (e) {
-        setErr('가격을 불러오지 못했습니다.');
+      } catch (_) {
+        setErr('Redis에서 가격을 불러오지 못했습니다.');
       }
     };
-    fetchOnce();
-    timer = setInterval(fetchOnce, 5000);
+    fetchFromRedis();
+    // 자동 갱신은 스케줄러에 맡김: 주기 요청 제거
     return () => { if (timer) clearInterval(timer); };
   }, [s]);
   return (
