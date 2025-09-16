@@ -62,13 +62,13 @@ export default function TradePage() {
     const q = String(searchQuery || "").trim().toLowerCase();
     let base = symbols;
     if (activeTab === "watch") base = base.filter(s => watchlist.includes(s.ticker));
-    if (!q) return base.slice(0, 200);
+    if (!q) return base; // 전체 노출 (필요시 UI에서 스크롤)
     return base.filter(s => (
       String(s.ticker).toLowerCase().includes(q) ||
       String(s.name || s.security || "").toLowerCase().includes(q) ||
       String(s.sector || "").toLowerCase().includes(q) ||
       String(s.industry || "").toLowerCase().includes(q)
-    )).slice(0, 200);
+    ));
   }, [searchQuery, symbols, activeTab, watchlist]);
 
   const onPickSymbol = (it) => {

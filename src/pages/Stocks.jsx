@@ -192,7 +192,6 @@ const Stocks = () => {
         <div className="px-4 py-2">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-white text-2xl font-bold">주식</h1>
               <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
                 {lastUpdate && (
                   <div className="flex items-center gap-1">
@@ -211,10 +210,6 @@ const Stocks = () => {
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={goToSimulator} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500">시뮬레이터</button>
-            </div>
-            <h1 className="text-white text-2xl font-bold">주식</h1>
             <button
               onClick={goToSimulator}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500"

@@ -43,7 +43,7 @@ export const useStockData = () => {
       || String(it.sector || "").toUpperCase().includes(q)
       || String(it.industry || "").toUpperCase().includes(q)
     ));
-    return filt.slice(0, 300);
+    return filt; // 제한 제거
   }, [tickers, symbols, query]);
 
   return {
