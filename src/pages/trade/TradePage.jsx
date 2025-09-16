@@ -4,7 +4,7 @@ import axios from "../../util/axiosInstance";
 import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Star, StarOff, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 
 export default function TradePage() {
   const url = new URL(window.location.href);
@@ -21,8 +21,7 @@ export default function TradePage() {
   const [symbols, setSymbols] = useState([]); // {ticker,name,sector,industry}[]
   const [openSearch, setOpenSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [watchlist, setWatchlist] = useState([]); // ticker[]
-  const [activeTab, setActiveTab] = useState("all"); // all | watch
+  // 즐겨찾기 기능 제거
 
   const [currentPrice, setCurrentPrice] = useState(null);
   const [priceChange, setPriceChange] = useState(null);
@@ -43,25 +42,9 @@ export default function TradePage() {
     return () => { mounted = false };
   }, []);
 
-  // 즐겨찾기 로드
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await axios.get("/watchlist");
-        const list = res?.data?.tickers || [];
-        if (mounted) setWatchlist(list);
-      } catch (_) {
-        if (mounted) setWatchlist([]);
-      }
-    })();
-    return () => { mounted = false };
-  }, []);
-
   const filteredSymbols = useMemo(() => {
     const q = String(searchQuery || "").trim().toLowerCase();
     let base = symbols;
-    if (activeTab === "watch") base = base.filter(s => watchlist.includes(s.ticker));
     if (!q) return base; // 전체 노출 (필요시 UI에서 스크롤)
     return base.filter(s => (
       String(s.ticker).toLowerCase().includes(q) ||
@@ -69,7 +52,7 @@ export default function TradePage() {
       String(s.sector || "").toLowerCase().includes(q) ||
       String(s.industry || "").toLowerCase().includes(q)
     ));
-  }, [searchQuery, symbols, activeTab, watchlist]);
+  }, [searchQuery, symbols]);
 
   const onPickSymbol = (it) => {
     setSymbol(it.ticker);
@@ -79,18 +62,7 @@ export default function TradePage() {
     setOpenSearch(false);
   };
 
-  const isWatched = (t) => watchlist.includes(t);
-  const toggleWatch = async (t) => {
-    try {
-      if (isWatched(t)) {
-        await axios.delete("/watchlist/remove", { params: { ticker: t } });
-        setWatchlist(prev => prev.filter(x => x !== t));
-      } else {
-        await axios.post("/watchlist/add", null, { params: { ticker: t } });
-        setWatchlist(prev => [...prev, t]);
-      }
-    } catch (_) {}
-  };
+  // 즐겨찾기 관련 로직 제거
 
   // 선택 날짜 기반 가격 계산: 시가(currentOpen) vs 전일 종가(prevClose)
   useEffect(() => {
@@ -160,18 +132,7 @@ export default function TradePage() {
             onClick={() => setOpenSearch(true)}
           />
         </div>
-        {symbol ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Button
-              variant={watchlist.includes(symbol) ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => toggleWatch(symbol)}
-              title="즐겨찾기 토글"
-            >
-              {watchlist.includes(symbol) ? <Star size={16} className="text-yellow-400" fill="currentColor" /> : <Star size={16} className="text-muted-foreground" />}
-            </Button>
-          </div>
-        ) : null}
+        {null}
       </div>
 
       {/* 검색 모달 */}
@@ -183,10 +144,6 @@ export default function TradePage() {
         </div>
         <CommandInput placeholder="검색어 입력 (티커/회사명/섹터/산업)" value={searchQuery} onValueChange={setSearchQuery} />
         <CommandList>
-          <div className="row" style={{ gap: 8, padding: '8px 12px' }}>
-            <Button variant={activeTab === 'all' ? 'secondary' : 'ghost'} size="sm" onClick={() => setActiveTab('all')}>전체 보기</Button>
-            <Button variant={activeTab === 'watch' ? 'secondary' : 'ghost'} size="sm" onClick={() => setActiveTab('watch')}>즐겨찾기 ({watchlist.length})</Button>
-          </div>
           <CommandSeparator />
           <CommandEmpty>결과 없음</CommandEmpty>
           <CommandGroup heading="검색 결과">
@@ -200,14 +157,7 @@ export default function TradePage() {
                       {it.industry ? <Badge variant="outline">{it.industry}</Badge> : null}
                     </div>
                   </div>
-                  <Button
-                    variant={isWatched(it.ticker) ? 'secondary' : 'ghost'}
-                    size="icon"
-                    onClick={(e) => { e.stopPropagation(); toggleWatch(it.ticker); }}
-                    style={{ width: 36, height: 36 }}
-                  >
-                    {isWatched(it.ticker) ? <Star size={16} className="text-yellow-400" fill="currentColor" /> : <Star size={16} className="text-muted-foreground" />}
-                  </Button>
+                  {/* 즐겨찾기 버튼 제거 */}
                 </div>
               </CommandItem>
             ))}
