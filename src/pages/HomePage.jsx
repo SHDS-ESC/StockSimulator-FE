@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
+import { ChevronRight, X, Heart, BarChart3, TrendingUp, LogIn, LogOut } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
@@ -10,7 +10,7 @@ const HomePage = () => {
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const { email, lastProfileId } = useLoginStore();
+  const { email, lastProfileId, clear } = useLoginStore();
 
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
@@ -118,6 +118,16 @@ const HomePage = () => {
     navigate("/character");
   };
 
+  const handleGoLogin = () => navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await axiosInstance.post("/user/logout");
+    } catch (_) { /* ignore */ }
+    clear();
+    sessionStorage.removeItem("accessToken");
+    navigate("/login");
+  };
+
   // const toggleFavorite = (stockSymbol) => {
   //   setFavoriteStocks((prev) => {
   //     const newFavorites = new Set(prev);
@@ -132,6 +142,14 @@ const HomePage = () => {
 
   return (
     <div className="h-full pt-10 pb-10">
+      {/* 상단 로그인/로그아웃 액션 (상태에 따라 토글) */}
+      <div className="px-4 mb-3 flex gap-2">
+        {sessionStorage.getItem("accessToken") ? (
+          <button onClick={handleLogout} className="px-3 py-2 rounded-lg bg-slate-800 text-white flex items-center gap-2">
+            <LogOut size={16} /> 로그아웃
+          </button>
+        ) : null}
+      </div>
       {/* 전체 콘텐츠 영역 */}
 
       {/* 자산 정보 섹션 (다크 배경) */}

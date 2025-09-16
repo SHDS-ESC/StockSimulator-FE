@@ -12,7 +12,7 @@ const useConfirmLogin = (page) => {
       .then(() => {
         if (page === "login") {
           alert("이미 로그인된 상태입니다! 홈으로 이동합니다.");
-          navigate("/"); // 홈 페이지로 이동
+          navigate("/home", { replace: true });
         } else {
           console.log("로그인 상태");
         }
@@ -21,7 +21,7 @@ const useConfirmLogin = (page) => {
         if (page !== "login") {
           console.log("로그인 상태 아님:", error);
           alert("로그인 한 유저만 접근할 수 있습니다.");
-          navigate("/"); // 홈 페이지로 이동
+          navigate("/login", { replace: true });
         }
       });
   }, [page, navigate]);

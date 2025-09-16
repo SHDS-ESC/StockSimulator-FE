@@ -7,10 +7,7 @@ import { useStockData } from "../hooks/useStockData";
 import { useWatchlist } from "../hooks/useWatchlist";
 import { useSimulation } from "../hooks/useSimulation";
 import StockSelector from "../components/StockSelector";
-import WatchlistPanel from "../components/WatchlistPanel";
-import SimulationControls from "../components/SimulationControls";
-import DateSelector from "../components/DateSelector";
-import SimulationModal from "../components/SimulationModal";
+// 메인 페이지는 비워두거나 향후 대시보드로 사용
 import { getCurrentDate } from "../util/dateUtils";
 import axios from "axios";
 import { Button} from "@/components/ui/button";
@@ -23,7 +20,7 @@ const Main = () => {
   const { query, setQuery, showPicker, setShowPicker, filteredTickers } =
     useStockData();
 
-  const { watchlist, toggleWatchlist } = useWatchlist();
+  // 메인 페이지에서는 심플하게 유지
 
   const {
     simCandles,
@@ -126,90 +123,8 @@ const Main = () => {
   }, []);
 
   return (
-    <div className="container">
-      {/* 헤더 */}
-      <div className="row space" style={{ marginBottom: 14 }}>
-        <div className="row" style={{ gap: 10 }}>
-          <strong style={{ fontSize: 18 }}>Stock Simulator</strong>
-          <Button className="btn brand" onClick={() => setShowPicker(true)}>
-            종목 선택
-          </Button>
-          <span className="muted">선택됨: {symbol || "-"}</span>
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <Button className="btn" onClick={handleGoToLogin}>
-            로그인
-          </Button>
-        </div>
-         <div className="row" style={{ gap: 8 }}>
-          <Button variants="destructive" className="btn" onClick={handleLogout}>
-            로그아웃
-          </Button>
-        </div>
-      </div>
-
-      {/* 관심 종목 패널 */}
-      <WatchlistPanel
-        watchlist={watchlist}
-        onSymbolSelect={handleSymbolSelect}
-      />
-
-      {/* 시뮬레이션 컨트롤 */}
-      <SimulationControls
-        symbol={symbol}
-        currentDate={currentDate}
-        canAdvance={canAdvance}
-        onEndTurn={handleEndTurn}
-        simIndex={simIndex}
-        simCandles={simCandles}
-      />
-
-      {/* 날짜 선택 */}
-      <DateSelector
-        selYear={selYear}
-        setSelYear={setSelYear}
-        selMonth={selMonth}
-        setSelMonth={setSelMonth}
-        selDay={selDay}
-        setSelDay={setSelDay}
-      />
-
-      {/* 시뮬레이션 모달 */}
-      <SimulationModal
-        showEndPreview={showEndPreview}
-        onCancel={cancelEndTurn}
-        onConfirm={handleConfirmEndTurn}
-        simIndex={simIndex}
-        simCandles={simCandles}
-      />
-
-      {/* 종목 선택 모달 */}
-      <StockSelector
-        showPicker={showPicker}
-        setShowPicker={setShowPicker}
-        filteredTickers={filteredTickers}
-        query={query}
-        setQuery={setQuery}
-        onSymbolSelect={handleSymbolSelect}
-        watchlist={watchlist}
-        toggleWatchlist={toggleWatchlist}
-      />
-
-      {/* 차트 */}
-      <div style={{ marginTop: 8 }}>
-        <UnifiedChart
-          symbol={symbol}
-          defaultMode="historical"
-          initialYear={selYear}
-          initialMonth={selMonth}
-          initialDay={selDay}
-          visibleCount={visibleCount}
-          autoLoad
-          onCandlesLoaded={(candles) => {
-            updateSimulation(candles, selYear, selMonth, selDay);
-          }}
-        />
-      </div>
+    <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 360 }}>
+      <div className="text-muted-foreground">메인 페이지는 준비 중입니다. 상단 메뉴에서 이동해 주세요.</div>
     </div>
   );
 };
