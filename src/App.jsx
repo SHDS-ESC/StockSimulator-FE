@@ -8,15 +8,17 @@ import Register from "./pages/Register";
 import MyPage from "./pages/Mypage";
 import Main from "./pages/Main";
 import { Header, Footer } from "./components/layout/Layout";
+import AnimatedBackground from "./components/AnimatedBackground";
 import "./index.css"; // Tailwind CSS + 모든 커스텀 스타일
 import TradePage from "./pages/trade/TradePage";
 import StockLive from "./pages/trade/StockLive";
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center font-['Jua']">
-        <Header />
-      <div className="bg-slate-950 w-full max-w-md  flex-1 flex flex-col">
+    <div className="min-h-screen flex flex-col items-center font-['Jua'] relative">
+      <AnimatedBackground />
+      <Header />
+      <div className="bg-slate-950 w-full max-w-md flex-1 flex flex-col relative z-20">
         <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative">
           <Routes>
             <Route path="/" element={<Main />} />
