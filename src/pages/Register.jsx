@@ -98,7 +98,7 @@ const Register = () => {
         tickerList,
       });
       if (response.status === 200) {
-        navigate("/login");
+        navigate("/");
       } else {
         setError("회원가입 실패: 다시 시도해주세요.");
       }

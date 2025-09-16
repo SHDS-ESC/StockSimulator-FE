@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
+import { ChevronRight, X, Heart, BarChart3, TrendingUp, LogIn, LogOut } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
@@ -10,7 +10,7 @@ const HomePage = () => {
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const { email, lastProfileId } = useLoginStore();
+  const { email, lastProfileId, clear } = useLoginStore();
 
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
@@ -22,37 +22,51 @@ const HomePage = () => {
   });
 
   useConfirmLogin(null);
-  // 초기 프로필 로드
+  // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
   const loadProfile = async () => {
-    fetchProfiles();
-      try {
-        const response = await axiosInstance.get(
-          `userprofile/profile/${lastProfileId}`,
-          { withCredentials: true }
-        );
-        setSelectedProfile(response.data);
-        console.log("activeProfile", response.data);
-        localStorage.setItem("newProfile", JSON.stringify(response.data));
-      } catch (error) {
-        console.error("Error fetching profiles:", error);
+    try {
+      const list = await fetchProfiles();
+      // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
+      if (lastProfileId && Number(lastProfileId) > 0) {
+        try {
+          const response = await axiosInstance.get(
+            `userprofile/profile/${lastProfileId}`,
+            { withCredentials: true }
+          );
+          setSelectedProfile(response.data);
+          localStorage.setItem("newProfile", JSON.stringify(response.data));
+        } catch (e) {
+          console.error("Error fetching active profile:", e);
+          if (Array.isArray(list) && list.length > 0) setSelectedProfile(list[0]);
+        }
+      } else if (Array.isArray(list) && list.length > 0) {
+        setSelectedProfile(list[0]);
       }
+    } catch (error) {
+      console.error("Error loading profiles:", error);
+    }
   };
 
   // 모든 프로필 불러오기
   const fetchProfiles = async () => {
+    if (!email || String(email).trim() === "") return [];
     try {
       const response = await axiosInstance.get(
-        `userprofile/profiles/${email}`,
+        `userprofile/profiles/${encodeURIComponent(email)}`,
         { withCredentials: true }
       );
-      setProfiles(response.data);
+      const list = response.data || [];
+      setProfiles(list);
+      return list;
     } catch (error) {
       console.error("Error fetching profiles:", error);
+      return [];
     }
   };
   useEffect(() => {
+    if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
     loadProfile();
-  }, []);
+  }, [email, lastProfileId]);
 
   // 프로필 선택
   const handleProfileSelect = (profile) => {
@@ -118,6 +132,16 @@ const HomePage = () => {
     navigate("/character");
   };
 
+  const handleGoLogin = () => navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await axiosInstance.post("/user/logout");
+    } catch (_) { /* ignore */ }
+    clear();
+    sessionStorage.removeItem("accessToken");
+    navigate("/");
+  };
+
   // const toggleFavorite = (stockSymbol) => {
   //   setFavoriteStocks((prev) => {
   //     const newFavorites = new Set(prev);
@@ -132,6 +156,14 @@ const HomePage = () => {
 
   return (
     <div className="h-full pt-10 pb-10">
+      {/* 상단 로그인/로그아웃 액션 (상태에 따라 토글) */}
+      <div className="px-4 mb-3 flex gap-2">
+        {sessionStorage.getItem("accessToken") ? (
+          <button onClick={handleLogout} className="px-3 py-2 rounded-lg bg-slate-800 text-white flex items-center gap-2">
+            <LogOut size={16} /> 로그아웃
+          </button>
+        ) : null}
+      </div>
       {/* 전체 콘텐츠 영역 */}
 
       {/* 자산 정보 섹션 (다크 배경) */}

@@ -63,14 +63,14 @@ axiosInstance.interceptors.response.use(
             console.log("🔄 세션이 만료되었습니다.");
             sessionStorage.removeItem("accessToken");
             alert("세션이 만료되어 다시 로그인해주세요.");
-            // window.location.href = '/login'; // 필요시 활성화
+            window.location.href = '/login';
             break;
             
           case "REFRESH_TOKEN_MISSING":
             console.log("🔑 리프레시 토큰이 없습니다.");
             sessionStorage.removeItem("accessToken");
             alert("로그인이 필요합니다.");
-            // window.location.href = '/login'; // 필요시 활성화
+            window.location.href = '/login';
             break;
             
           case "TOKEN_ERROR":
@@ -78,18 +78,21 @@ axiosInstance.interceptors.response.use(
               console.log("❌ 토큰이 없거나 형식이 잘못되었습니다.");
               sessionStorage.removeItem("accessToken");
               alert("인증 정보가 없습니다. 로그인해주세요.");
+              window.location.href = '/login';
             } else if (data.message === "EXPIRED") {
               console.log("⏰ 토큰이 만료되었습니다.");
               // 이 경우는 서버에서 자동으로 리프레시를 시도할 것임
             } else {
               console.log("🚫 토큰 에러:", data.message);
               alert(`토큰 오류: ${data.message}`);
+              window.location.href = '/login';
             }
             break;
             
           default:
             console.log("🔐 기타 인증 오류:", data.errorCode);
             alert(data.message || "인증 오류가 발생했습니다.");
+            window.location.href = '/login';
         }
       }
       

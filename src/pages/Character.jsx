@@ -126,13 +126,13 @@ const Character = () => {
       createUserProfile(newProfile);
       // 성공 후 홈페이지로 이동
       alert("프로필이 생성되었습니다!");
-      navigate("/");
+      navigate("/home");
     }
   };
 
   const handleGoBack = () => {
     // 홈페이지로 돌아가기
-    navigate("/");
+    navigate("/home");
   };
 
   return (

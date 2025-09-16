@@ -22,14 +22,13 @@ function App() {
       <div className="bg-slate-950 w-full max-w-md flex-1 flex flex-col relative z-20">
         <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative">
           <Routes>
-            <Route path="/" element={<Main />} />
+            <Route path="/" element={<Login />} />
             <Route path="/trade" element={<TradePage />} />
             <Route path="/stocks/live/:symbol" element={<StockLive />} />
             <Route path="/home" element={<HomePage />} />
             <Route path="/character" element={<Character />} />
             <Route path="/stocks" element={<Stocks />} />
             <Route path="/news" element={<News />} />
-            <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/mypage" element={<MyPage />} />
         <Route path="/redis-test" element={<RedisTest />} />
