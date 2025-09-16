@@ -8,7 +8,7 @@ export const useWatchlist = () => {
   useEffect(() => {
     const loadWatchlist = async () => {
       try {
-        const watchRes = await axiosInstance.get("/api/watchlist", { params: { user: "guest" } });
+        const watchRes = await axiosInstance.get("/watchlist", { params: { user: "guest" } });
         const warr = Array.isArray(watchRes?.data?.tickers) ? watchRes.data.tickers : [];
         setWatchlist(warr);
       } catch (_) { /* ignore */ }
@@ -18,7 +18,7 @@ export const useWatchlist = () => {
 
   const addToWatchlist = async (ticker) => {
     try {
-      await axiosInstance.post('/api/watchlist/add', null, { 
+      await axiosInstance.post('/watchlist/add', null, { 
         params: { ticker, user: 'guest' } 
       });
       setWatchlist((prev) => Array.from(new Set([...prev, ticker])));
@@ -27,7 +27,7 @@ export const useWatchlist = () => {
 
   const removeFromWatchlist = async (ticker) => {
     try {
-      await axiosInstance.delete('/api/watchlist/remove', { 
+      await axiosInstance.delete('/watchlist/remove', { 
         params: { ticker, user: 'guest' } 
       });
       setWatchlist((prev) => prev.filter(t => t !== ticker));

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home,
@@ -9,23 +9,59 @@ import {
   Newspaper,
   User,
   ChevronLeft,
+  Menu,
+  X,
+  Settings,
 } from "lucide-react";
 
 // Header 컴포넌트
 export const Header = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const toggleMenu = () => {
+    setIsMenuOpen(!isMenuOpen);
+  };
+
+
+  const handleRedisTestClick = () => {
+    navigate("/redis-test");
+    setIsMenuOpen(false);
+  };
+
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
       <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer">
-            <div className="w-4 h-0.5 bg-white"></div>
-            <div className="w-4 h-0.5 bg-white"></div>
-            <div className="w-4 h-0.5 bg-white"></div>
-          </div>
+          <button
+            onClick={toggleMenu}
+            className="w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"
+          >
+            {isMenuOpen ? (
+              <X className="w-5 h-5 text-white" />
+            ) : (
+              <Menu className="w-5 h-5 text-white" />
+            )}
+          </button>
         </div>
         <h1 className="text-white text-lg font-bold">FINT</h1>
         <User className="w-6 h-6 text-white" />
       </div>
+      
+      {/* 드롭다운 메뉴 */}
+      {isMenuOpen && (
+        <div className="absolute top-full left-0 w-full bg-slate-800 border-t border-slate-700 shadow-lg">
+          <div className="px-4 py-2">
+            <button
+              onClick={handleRedisTestClick}
+              className="w-full flex items-center gap-3 px-3 py-2 text-white hover:bg-slate-700 rounded-md transition-colors"
+            >
+              <Settings className="w-5 h-5" />
+              <span>Redis 관리</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

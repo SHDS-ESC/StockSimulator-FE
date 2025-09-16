@@ -1,14 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { ChevronLeft, Search, X, Heart } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
+import { ChevronLeft, Search, X, Heart, AlertCircle, Clock } from "lucide-react";
+import useRealtimeStocks from "../hooks/useRealtimeStocks";
 
 const Stocks = () => {
   const navigate = useNavigate();
@@ -17,73 +11,17 @@ const Stocks = () => {
   const [selectedFilter, setSelectedFilter] = useState("이름");
   const [selectedStocks, setSelectedStocks] = useState([]);
   const [favoriteStocks, setFavoriteStocks] = useState(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [stocksPerPage] = useState(6); // 페이지당 6개 주식 표시
 
-  const stocks = [
-    {
-      symbol: "AAPL",
-      name: "애플",
-      price: "$238.69",
-      change: "-0.2%",
-      changeAmount: "-$0.48",
-      logo: "🍎",
-    },
-    {
-      symbol: "MMM",
-      name: "3M",
-      price: "$155.30",
-      change: "-0.1%",
-      changeAmount: "-$0.16",
-      logo: "3️⃣",
-    },
-    {
-      symbol: "NFLX",
-      name: "넷플릭스",
-      price: "$1,243.82",
-      change: "+0.8%",
-      changeAmount: "+$9.87",
-      logo: "🎬",
-    },
-    {
-      symbol: "TSLA",
-      name: "테슬라",
-      price: "$245.67",
-      change: "+2.3%",
-      changeAmount: "+$5.52",
-      logo: "🚗",
-    },
-    {
-      symbol: "NVDA",
-      name: "엔비디아",
-      price: "$456.23",
-      change: "+3.2%",
-      changeAmount: "+$14.15",
-      logo: "🎮",
-    },
-    {
-      symbol: "GOOGL",
-      name: "구글",
-      price: "$2,856.12",
-      change: "+1.2%",
-      changeAmount: "+$33.89",
-      logo: "🔍",
-    },
-    {
-      symbol: "MSFT",
-      name: "마이크로소프트",
-      price: "$378.45",
-      change: "-0.8%",
-      changeAmount: "-$3.05",
-      logo: "🪟",
-    },
-    {
-      symbol: "AMZN",
-      name: "아마존",
-      price: "$3,234.56",
-      change: "+0.5%",
-      changeAmount: "+$16.12",
-      logo: "📦",
-    },
-  ];
+  // 실시간 주식 데이터 훅 사용
+  const {
+    stocks,
+    loading,
+    error,
+    lastUpdate,
+    isUpdating
+  } = useRealtimeStocks();
 
   const newsItems = [
     {
@@ -188,11 +126,52 @@ const Stocks = () => {
     });
   };
 
-  const filteredStocks = stocks.filter(
-    (stock) =>
-      stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      stock.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // 필터링된 주식 목록
+  const filteredStocks = useMemo(() => {
+    let filtered = stocks.filter(
+      (stock) =>
+        stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        stock.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    // 정렬 적용
+    switch (selectedFilter) {
+      case "이름":
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "가격":
+        filtered.sort((a, b) => {
+          const priceA = parseFloat(a.price.replace('$', '').replace(',', ''));
+          const priceB = parseFloat(b.price.replace('$', '').replace(',', ''));
+          return priceB - priceA; // 높은 가격순
+        });
+        break;
+      case "등락률":
+        filtered.sort((a, b) => {
+          const changeA = parseFloat(a.change.replace('%', ''));
+          const changeB = parseFloat(b.change.replace('%', ''));
+          return changeB - changeA; // 높은 등락률순
+        });
+        break;
+      default:
+        break;
+    }
+
+    return filtered;
+  }, [stocks, searchQuery, selectedFilter]);
+
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredStocks.length / stocksPerPage);
+  const startIndex = (currentPage - 1) * stocksPerPage;
+  const endIndex = startIndex + stocksPerPage;
+  const currentStocks = filteredStocks.slice(startIndex, endIndex);
+
+  // 검색어 변경 시 첫 페이지로 이동
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedFilter]);
+
+  // 페이지 이동 시 자동 갱신 제거 (스케줄러가 알아서 갱신)
 
   return (
     <div>
@@ -212,6 +191,29 @@ const Stocks = () => {
         {/* 페이지 제목 */}
         <div className="px-4 py-2">
           <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-white text-2xl font-bold">주식</h1>
+              <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
+                {lastUpdate && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    <span>마지막 업데이트: {lastUpdate.toLocaleTimeString()}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1">
+                  <span>총 {stocks.length}개 주식</span>
+                  {filteredStocks.length !== stocks.length && (
+                    <span>(검색 결과: {filteredStocks.length}개)</span>
+                  )}
+                  {filteredStocks.length > stocksPerPage && (
+                    <span>(페이지 {currentPage}/{totalPages})</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={goToSimulator} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500">시뮬레이터</button>
+            </div>
             <h1 className="text-white text-2xl font-bold">주식</h1>
             <button
               onClick={goToSimulator}
@@ -376,8 +378,48 @@ const Stocks = () => {
 
             {/* 주식 목록 */}
             <div className="px-4 py-2">
-              <div className="space-y-2">
-                {filteredStocks.map((stock, index) => (
+              {error && (
+                <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm">{error}</span>
+                  </div>
+                </div>
+              )}
+
+              {loading ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-slate-800 rounded-xl animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-700 rounded-lg"></div>
+                        <div>
+                          <div className="h-4 bg-slate-700 rounded w-20 mb-2"></div>
+                          <div className="h-3 bg-slate-700 rounded w-16"></div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="h-4 bg-slate-700 rounded w-16 mb-2"></div>
+                          <div className="h-3 bg-slate-700 rounded w-12"></div>
+                        </div>
+                        <div className="w-6 h-6 bg-slate-700 rounded-full"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {currentStocks.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-400 text-sm">검색 결과가 없습니다</p>
+                      <p className="text-gray-500 text-xs mt-1">
+                        다른 검색어를 시도해보세요
+                      </p>
+                    </div>
+                  ) : (
+                    currentStocks.map((stock, index) => (
                   <div
                     key={index}
                     onClick={() => handleStockSelect(stock)}
@@ -405,18 +447,29 @@ const Stocks = () => {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-white font-semibold">
-                          {stock.price}
+                        <p className="text-white font-semibold text-lg">
+                          {stock.price.startsWith('$') ? stock.price : `$${stock.price}`}
                         </p>
-                        <p
-                          className={`text-sm ${
-                            stock.change.includes("+")
-                              ? "text-red-500"
-                              : "text-blue-500"
-                          }`}
-                        >
-                          {stock.change}
-                        </p>
+                        <div className="flex items-center gap-1">
+                          <p
+                            className={`text-sm font-medium ${
+                              stock.change.includes("+")
+                                ? "text-red-500"
+                                : "text-blue-500"
+                            }`}
+                          >
+                            {stock.change}
+                          </p>
+                          <p
+                            className={`text-xs ${
+                              stock.changePercent.includes("+")
+                                ? "text-red-500"
+                                : "text-blue-500"
+                            }`}
+                          >
+                            ({stock.changePercent})
+                          </p>
+                        </div>
                       </div>
                       <button
                         onClick={(e) => {
@@ -435,7 +488,53 @@ const Stocks = () => {
                       </button>
                     </div>
                   </div>
-                ))}
+                    ))
+                  )}
+                </div>
+              )}
+
+              {/* 페이지네이션 */}
+              {filteredStocks.length > stocksPerPage && (
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-sm text-gray-400">
+                    {startIndex + 1}-{Math.min(endIndex, filteredStocks.length)} / {filteredStocks.length}개
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className={`px-3 py-1 rounded-md text-sm ${
+                        currentPage === 1 
+                          ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                          : 'bg-slate-700 text-white hover:bg-slate-600'
+                      }`}
+                    >
+                      이전
+                    </button>
+                    <span className="text-sm text-gray-400">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className={`px-3 py-1 rounded-md text-sm ${
+                        currentPage === totalPages 
+                          ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                          : 'bg-slate-700 text-white hover:bg-slate-600'
+                      }`}
+                    >
+                      다음
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Redis 데이터 안내 */}
+              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                <div className="flex items-center gap-2 text-blue-400 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Redis 데이터: 백그라운드 스케줄러가 20분마다 자동 갱신하는 주식 데이터 | 갱신 없이 읽기만</span>
+                </div>
               </div>
             </div>
           </>
@@ -485,18 +584,29 @@ const Stocks = () => {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="text-white font-semibold">
-                            {stock.price}
+                          <p className="text-white font-semibold text-lg">
+                            {stock.price.startsWith('$') ? stock.price : `$${stock.price}`}
                           </p>
-                          <p
-                            className={`text-sm ${
-                              stock.change.includes("+")
-                                ? "text-red-500"
-                                : "text-blue-500"
-                            }`}
-                          >
-                            {stock.change}
-                          </p>
+                          <div className="flex items-center gap-1">
+                            <p
+                              className={`text-sm font-medium ${
+                                stock.change.includes("+")
+                                  ? "text-red-500"
+                                  : "text-blue-500"
+                              }`}
+                            >
+                              {stock.change}
+                            </p>
+                            <p
+                              className={`text-xs ${
+                                stock.changePercent.includes("+")
+                                  ? "text-red-500"
+                                  : "text-blue-500"
+                              }`}
+                            >
+                              ({stock.changePercent})
+                            </p>
+                          </div>
                         </div>
                         <button
                           onClick={() => toggleFavorite(stock.symbol)}

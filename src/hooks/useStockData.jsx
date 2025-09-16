@@ -12,8 +12,8 @@ export const useStockData = () => {
     const load = async () => {
       try {
         const [tickersRes, watchRes] = await Promise.all([
-          axiosInstance.get("/api/db/tickers"),
-          axiosInstance.get("/api/watchlist", { params: { user: "guest" } })
+          axiosInstance.get("/db/tickers"),
+          axiosInstance.get("/watchlist", { params: { user: "guest" } })
         ]);
         const arr = Array.isArray(tickersRes?.data?.tickers) ? tickersRes.data.tickers : [];
         setTickers(arr);
@@ -27,7 +27,7 @@ export const useStockData = () => {
     if (!showPicker || symbols.length) return;
     (async () => {
       try {
-        const sres = await axiosInstance.get("/api/db/symbols");
+        const sres = await axiosInstance.get("/db/symbols");
         const sarr = Array.isArray(sres?.data?.symbols) ? sres.data.symbols : [];
         setSymbols(sarr);
       } catch (_) { /* ignore */ }

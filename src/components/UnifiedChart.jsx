@@ -179,13 +179,13 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
   const loadMonthWithPrevWeek = async (y, m) => {
     const start = epochFromYmd(y, m, 1, false);
     const end = epochFromYmd(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 0, true);
-    const res = await axiosInstance.get('/api/db/candles', { params: { ticker: symbol, from: start, to: end } });
+    const res = await axiosInstance.get('/db/candles', { params: { ticker: symbol, from: start, to: end } });
     const monthCandles = normalizeCandles(res.data);
     const prevStart = start - 30 * 86400;
     const prevEnd = start - 1;
     let prevCandles = [];
     try {
-      const pres = await axiosInstance.get('/api/db/candles', { params: { ticker: symbol, from: prevStart, to: prevEnd } });
+      const pres = await axiosInstance.get('/db/candles', { params: { ticker: symbol, from: prevStart, to: prevEnd } });
       prevCandles = normalizeCandles(pres.data);
     } catch (_) {}
     return { combined: [...prevCandles, ...monthCandles], start, end };
