@@ -12,10 +12,12 @@ import SimulationControls from "../components/SimulationControls";
 import DateSelector from "../components/DateSelector";
 import SimulationModal from "../components/SimulationModal";
 import { getCurrentDate } from "../util/dateUtils";
+import axios from "axios";
+import { Button} from "@/components/ui/button";
 
 const Main = () => {
   const navigate = useNavigate();
-  const { setEmail, setLevel, setTickerList,  setUpdatedAt } = useLoginStore(); //clear 추가
+  const { clear, setEmail, setLevel, setTickerList, setLastProfileId, setUpdatedAt } = useLoginStore();
 
   // 커스텀 훅들 사용
   const { query, setQuery, showPicker, setShowPicker, filteredTickers } =
@@ -52,29 +54,29 @@ const Main = () => {
   };
 
 
-  // const handleLogout = async () => {
-  //   const token = sessionStorage.getItem("accessToken");
-  //   if (!token) {
-  //     clear();
-  //     navigate("/login");
-  //     return;
-  //   }
+  const handleLogout = async () => {
+    const token = sessionStorage.getItem("accessToken");
+    if (!token) {
+      clear();
+      navigate("/login");
+      return;
+    }
 
-  //   // 먼저 서버 로그아웃 요청을 완료하고
-  //   try {
-  //     await axios.post("http://localhost:8090/api/user/logout", null, {
-  //       withCredentials: true,
-  //       headers: { Authorization: `Bearer ${token}` },
-  //     });
-  //   } catch (e) {
-  //     console.log("logout error", e); // 에러는 로그로 남기고 무시
-  //   } finally {
-  //     // 그 다음 클라이언트 상태/토큰 제거 후 로그인으로 이동
-  //     clear();
-  //     sessionStorage.removeItem("accessToken");
-  //     navigate("/login");
-  //   }
-  // };
+    // 먼저 서버 로그아웃 요청을 완료하고
+    try {
+      await axios.post("http://localhost:8090/api/user/logout", null, {
+        withCredentials: true,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      console.log("logout error", e); // 에러는 로그로 남기고 무시
+    } finally {
+      // 그 다음 클라이언트 상태/토큰 제거 후 로그인으로 이동
+      clear();
+      sessionStorage.removeItem("accessToken");
+      navigate("/login");
+    }
+  };
   useEffect(() => {
     // 토큰이 없으면 사용자 정보 조회를 건너뜀 (토큰이 재저장되는 문제 방지)
     const token = sessionStorage.getItem("accessToken");
@@ -85,9 +87,10 @@ const Main = () => {
       setEmail(response.data.email ?? response.data.username);
       setLevel(response.data.level);
       setTickerList(response.data.tickerList);
+      setLastProfileId(response.data.lastProfileId);
       setUpdatedAt(new Date().toISOString());
     });
-  }, [setEmail, setLevel, setTickerList, setUpdatedAt]);
+  }, [setEmail, setLevel, setTickerList, setLastProfileId, setUpdatedAt]);
   // 시뮬레이션 진행 시 날짜 자동 업데이트
   const handleConfirmEndTurn = () => {
     confirmEndTurn();
@@ -128,15 +131,20 @@ const Main = () => {
       <div className="row space" style={{ marginBottom: 14 }}>
         <div className="row" style={{ gap: 10 }}>
           <strong style={{ fontSize: 18 }}>Stock Simulator</strong>
-          <button className="btn brand" onClick={() => setShowPicker(true)}>
+          <Button className="btn brand" onClick={() => setShowPicker(true)}>
             종목 선택
-          </button>
+          </Button>
           <span className="muted">선택됨: {symbol || "-"}</span>
         </div>
         <div className="row" style={{ gap: 8 }}>
-          <button className="btn" onClick={handleGoToLogin}>
+          <Button className="btn" onClick={handleGoToLogin}>
             로그인
-          </button>
+          </Button>
+        </div>
+         <div className="row" style={{ gap: 8 }}>
+          <Button variants="destructive" className="btn" onClick={handleLogout}>
+            로그아웃
+          </Button>
         </div>
       </div>
 

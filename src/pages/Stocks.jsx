@@ -15,11 +15,11 @@ const Stocks = () => {
   const [stocksPerPage] = useState(6); // 페이지당 6개 주식 표시
 
   // 실시간 주식 데이터 훅 사용
-  const { 
-    stocks, 
-    loading, 
-    error, 
-    lastUpdate, 
+  const {
+    stocks,
+    loading,
+    error,
+    lastUpdate,
     isUpdating
   } = useRealtimeStocks();
 
@@ -214,6 +214,13 @@ const Stocks = () => {
             <div className="flex items-center gap-2">
               <button onClick={goToSimulator} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500">시뮬레이터</button>
             </div>
+            <h1 className="text-white text-2xl font-bold">주식</h1>
+            <button
+              onClick={goToSimulator}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-500"
+            >
+              시뮬레이터
+            </button>
           </div>
         </div>
 
@@ -222,26 +229,63 @@ const Stocks = () => {
           <DialogContent className="bg-slate-900 text-white border border-slate-700">
             <DialogHeader>
               <DialogTitle>시뮬레이션 날짜 선택</DialogTitle>
-              <DialogDescription className="text-slate-400">과거 특정 날짜로 돌아가 시뮬레이션을 시작합니다.</DialogDescription>
+              <DialogDescription className="text-slate-400">
+                과거 특정 날짜로 돌아가 시뮬레이션을 시작합니다.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-3 gap-3 mt-2">
               <div>
-                <label className="text-sm text-slate-300">연도(1980~현재)</label>
-                <input type="number" className="field w-full" value={simY} onChange={(e)=>setSimY(e.target.value)} min={1980} max={new Date().getFullYear()} />
+                <label className="text-sm text-slate-300">
+                  연도(1980~현재)
+                </label>
+                <input
+                  type="number"
+                  className="field w-full"
+                  value={simY}
+                  onChange={(e) => setSimY(e.target.value)}
+                  min={1980}
+                  max={new Date().getFullYear()}
+                />
               </div>
               <div>
                 <label className="text-sm text-slate-300">월(1~12)</label>
-                <input type="number" className="field w-full" value={simM} onChange={(e)=>setSimM(e.target.value)} min={1} max={12} />
+                <input
+                  type="number"
+                  className="field w-full"
+                  value={simM}
+                  onChange={(e) => setSimM(e.target.value)}
+                  min={1}
+                  max={12}
+                />
               </div>
               <div>
                 <label className="text-sm text-slate-300">일(1~31)</label>
-                <input type="number" className="field w-full" value={simD} onChange={(e)=>setSimD(e.target.value)} min={1} max={31} />
+                <input
+                  type="number"
+                  className="field w-full"
+                  value={simD}
+                  onChange={(e) => setSimD(e.target.value)}
+                  min={1}
+                  max={31}
+                />
               </div>
             </div>
-            {errMsg && <div className="text-red-400 text-sm mt-2">{errMsg}</div>}
+            {errMsg && (
+              <div className="text-red-400 text-sm mt-2">{errMsg}</div>
+            )}
             <div className="flex gap-2 justify-end mt-4">
-              <button className="px-3 py-2 bg-slate-800 rounded" onClick={()=>setOpenSimModal(false)}>취소</button>
-              <button className="px-3 py-2 bg-blue-600 rounded" onClick={submitSim}>시작</button>
+              <button
+                className="px-3 py-2 bg-slate-800 rounded"
+                onClick={() => setOpenSimModal(false)}
+              >
+                취소
+              </button>
+              <button
+                className="px-3 py-2 bg-blue-600 rounded"
+                onClick={submitSim}
+              >
+                시작
+              </button>
             </div>
           </DialogContent>
         </Dialog>
@@ -342,7 +386,7 @@ const Stocks = () => {
                   </div>
                 </div>
               )}
-              
+
               {loading ? (
                 <div className="space-y-2">
                   {[...Array(5)].map((_, index) => (
@@ -382,8 +426,19 @@ const Stocks = () => {
                     className="flex items-center justify-between p-3 bg-slate-800 rounded-xl cursor-pointer hover:bg-slate-700 transition-colors"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-lg">
-                        {stock.logo}
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-lg overflow-hidden">
+                        <img
+                          src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                          alt={stock.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                        <span className="text-gray-600 font-bold text-xs hidden">
+                          {stock.symbol}
+                        </span>
                       </div>
                       <div>
                         <h4 className="text-white font-medium">{stock.name}</h4>
@@ -437,7 +492,7 @@ const Stocks = () => {
                   )}
                 </div>
               )}
-              
+
               {/* 페이지네이션 */}
               {filteredStocks.length > stocksPerPage && (
                 <div className="mt-6 flex items-center justify-between">
@@ -504,8 +559,19 @@ const Stocks = () => {
                       className="flex items-center justify-between p-3 bg-slate-800 rounded-xl cursor-pointer hover:bg-slate-700 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-lg">
-                          {stock.logo}
+                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-lg overflow-hidden">
+                          <img
+                            src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                            alt={stock.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
+                          />
+                          <span className="text-gray-600 font-bold text-xs hidden">
+                            {stock.symbol}
+                          </span>
                         </div>
                         <div>
                           <h4 className="text-white font-medium">

@@ -2,10 +2,16 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
+import useLoginStore from "@/store/useLoginStore";
+import useConfirmLogin from "../hooks/useConfirmLogin";
 
 const HomePage = () => {
   const navigate = useNavigate();
+
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const { email, lastProfileId } = useLoginStore();
+
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
     totalInvested: 0,
@@ -15,34 +21,54 @@ const HomePage = () => {
     state: true,
   });
 
-  const [profiles, setProfiles] = useState([]);
-
-  useEffect(() => {
-    const fetchProfiles = async () => {
+  useConfirmLogin(null);
+  // 초기 프로필 로드
+  const loadProfile = async () => {
+    fetchProfiles();
       try {
-        const nickname = selectedProfile?.nickname
-          ? `/${selectedProfile.nickname}`
-          : "";
         const response = await axiosInstance.get(
-          `userprofile/profiles${nickname}`,
+          `userprofile/profile/${lastProfileId}`,
           { withCredentials: true }
         );
-
-        setProfiles(response.data);
-
-        // state가 true인 프로필 선택, 없으면 첫 번째 선택
-        const activeProfile =
-          response.data.find((p) => p.state) || response.data[0];
-        setSelectedProfile(activeProfile);
-
-        localStorage.setItem("newProfile", JSON.stringify(activeProfile));
+        setSelectedProfile(response.data);
+        console.log("activeProfile", response.data);
+        localStorage.setItem("newProfile", JSON.stringify(response.data));
       } catch (error) {
         console.error("Error fetching profiles:", error);
       }
-    };
+  };
 
-    fetchProfiles();
+  // 모든 프로필 불러오기
+  const fetchProfiles = async () => {
+    try {
+      const response = await axiosInstance.get(
+        `userprofile/profiles/${email}`,
+        { withCredentials: true }
+      );
+      setProfiles(response.data);
+    } catch (error) {
+      console.error("Error fetching profiles:", error);
+    }
+  };
+  useEffect(() => {
+    loadProfile();
   }, []);
+
+  // 프로필 선택
+  const handleProfileSelect = (profile) => {
+    axiosInstance
+      .post(
+        `userprofile/select`,
+        { userProfileId: profile.id, email: email },
+        { withCredentials: true }
+      )
+      .then((res) => {
+        console.log("프로필 선택 성공:", res.data.id);
+        setSelectedProfile(profile);
+        useLoginStore.setState({ lastProfileId: profile.id });
+        setTimeout(() => setIsProfileModalOpen(false), 200);
+      });
+  };
 
   const stocks = [
     {
@@ -86,10 +112,6 @@ const HomePage = () => {
       logo: "🎮",
     },
   ];
-const handleProfileSelect = (profile) => {
-  setSelectedProfile(profile);
-  setTimeout(() => setIsProfileModalOpen(false), 200);
-};
 
   const handleCreateProfile = () => {
     // Character 페이지로 이동
@@ -125,8 +147,8 @@ const handleProfileSelect = (profile) => {
               {selectedProfile?.nickname}
             </h2>
             <span className="text-gray-400 text-sm">
-              {selectedProfile
-                ? "TimeLine : 실시간 "
+              {selectedProfile  
+                ? "TimeLine : " + selectedProfile.name
                 : "TimeLine : 없음"}
             </span>
           </div>
@@ -135,7 +157,7 @@ const handleProfileSelect = (profile) => {
         {/* 총 잔고 */}
         <div className="mb-4">
           <h3 className="text-white text-3xl font-bold">
-            {selectedProfile?.balance}
+            $ {selectedProfile?.cashBalance}
           </h3>
           <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
         </div>
@@ -145,13 +167,13 @@ const handleProfileSelect = (profile) => {
           <div>
             <p className="text-gray-400 text-xs mb-1">투자</p>
             <p className="text-white text-lg font-semibold">
-              {selectedProfile?.totalAssets}
+              $ {selectedProfile?.totalAssets}
             </p>
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-1">현금</p>
             <p className="text-white text-lg font-semibold">
-              {selectedProfile?.totalInvested}
+              $ {selectedProfile?.totalInvested}
             </p>
           </div>
         </div>
@@ -171,8 +193,19 @@ const handleProfileSelect = (profile) => {
             {stocks.map((stock, index) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <img
+                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      alt={stock.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                    <span className="text-gray-600 font-bold text-xs hidden">
+                      {stock.symbol}
+                    </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
@@ -210,8 +243,19 @@ const handleProfileSelect = (profile) => {
                 className="flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <img
+                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      alt={stock.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                    <span className="text-gray-600 font-bold text-xs hidden">
+                      {stock.symbol}
+                    </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
@@ -298,13 +342,11 @@ const handleProfileSelect = (profile) => {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">
-                        서브타이틀
-                      </p>
+                      <p className="text-gray-400 text-sm mt-1">서브타이틀</p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
-                        {profile.cashBalance}
+                        $ {profile.cashBalance}
                       </p>
                       <p className="text-gray-400 text-xs">총자산</p>
                     </div>

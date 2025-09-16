@@ -12,8 +12,10 @@ import {
 import useTimeLineStore from "@/store/useTimeLineStore";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
+import useConfirmLogin from "../hooks/useConfirmLogin";
 
 const Character = () => {
+  useConfirmLogin(null);
   const navigate = useNavigate();
   const { email } = useLoginStore();
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -48,6 +50,7 @@ const Character = () => {
     try {
       const response = await axiosInstance.post("/userprofile/create", profile);
       console.log("프로필 생성 성공:", response.data);
+      useLoginStore.setState({ lastProfileId: response.data.id });
       return response.data;
     } catch (error) {
       console.error("프로필 생성 실패:", error);
@@ -120,9 +123,7 @@ const Character = () => {
 
   const handleCreateProfile = () => {
     if (newProfile.nickname.trim()) {
-      // 새 프로필 데이터를 localStorage에 저장
       createUserProfile(newProfile);
-      localStorage.setItem("newProfile", JSON.stringify(newProfile));
       // 성공 후 홈페이지로 이동
       alert("프로필이 생성되었습니다!");
       navigate("/");
@@ -137,9 +138,7 @@ const Character = () => {
   return (
     <div className="bg-slate-950 w-full max-w-md mx-auto h-screen overflow-y-auto custom-scrollbar relative">
       {/* 전체 콘텐츠 영역 - 헤더/푸터 높이만큼 패딩 */}
-      <div
-        className="overflow-y-auto"
-      > 
+      <div className="overflow-y-auto">
         {/* 뒤로가기 버튼 */}
         <div className="px-4 py-4">
           <button
