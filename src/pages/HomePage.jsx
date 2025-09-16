@@ -11,8 +11,8 @@ const HomePage = () => {
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const {email} = useLoginStore();
-  
+  const { email } = useLoginStore();
+
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
     totalInvested: 0,
@@ -46,14 +46,19 @@ const HomePage = () => {
     fetchProfiles();
   }, [selectedProfile.id, email]);
 
-const handleProfileSelect = (profile) => {
-  axiosInstance.post(`userprofile/select`, { userProfileId: profile.id, email : email }, { withCredentials: true })
-    .then((res) => {
-      console.log("프로필 선택 성공:", res.data);
-      setSelectedProfile(profile);
-      setTimeout(() => setIsProfileModalOpen(false), 200);
-    }); 
-};
+  const handleProfileSelect = (profile) => {
+    axiosInstance
+      .post(
+        `userprofile/select`,
+        { userProfileId: profile.id, email: email },
+        { withCredentials: true }
+      )
+      .then((res) => {
+        console.log("프로필 선택 성공:", res.data);
+        setSelectedProfile(profile);
+        setTimeout(() => setIsProfileModalOpen(false), 200);
+      });
+  };
 
   const stocks = [
     {
@@ -142,7 +147,7 @@ const handleProfileSelect = (profile) => {
         {/* 총 잔고 */}
         <div className="mb-4">
           <h3 className="text-white text-3xl font-bold">
-          $  {selectedProfile?.cashBalance}
+            $ {selectedProfile?.cashBalance}
           </h3>
           <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
         </div>
@@ -178,8 +183,19 @@ const handleProfileSelect = (profile) => {
             {stocks.map((stock, index) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <img
+                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      alt={stock.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                    <span className="text-gray-600 font-bold text-xs hidden">
+                      {stock.symbol}
+                    </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
@@ -217,8 +233,19 @@ const handleProfileSelect = (profile) => {
                 className="flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <img
+                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      alt={stock.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                    <span className="text-gray-600 font-bold text-xs hidden">
+                      {stock.symbol}
+                    </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
@@ -305,9 +332,7 @@ const handleProfileSelect = (profile) => {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">
-                        서브타이틀
-                      </p>
+                      <p className="text-gray-400 text-sm mt-1">서브타이틀</p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
