@@ -50,7 +50,6 @@ const HomePage = () => {
       console.error("Error fetching profiles:", error);
     }
   };
-
   useEffect(() => {
     loadProfile();
   }, []);
@@ -194,8 +193,19 @@ const HomePage = () => {
             {stocks.map((stock, index) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <img
+                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      alt={stock.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                    <span className="text-gray-600 font-bold text-xs hidden">
+                      {stock.symbol}
+                    </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
@@ -233,8 +243,19 @@ const HomePage = () => {
                 className="flex items-center justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <img
+                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      alt={stock.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                    <span className="text-gray-600 font-bold text-xs hidden">
+                      {stock.symbol}
+                    </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
