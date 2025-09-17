@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog";
 import { ChevronLeft, Search, X, Heart, AlertCircle, Clock } from "lucide-react";
 import useRealtimeStocks from "../hooks/useRealtimeStocks";
+import useWatchlist from "../hooks/useWatchlist";
+import useLoginStore from "../store/useLoginStore";
 
 const Stocks = () => {
   const navigate = useNavigate();
@@ -10,9 +12,11 @@ const Stocks = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("이름");
   const [selectedStocks, setSelectedStocks] = useState([]);
-  const [favoriteStocks, setFavoriteStocks] = useState(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [stocksPerPage] = useState(6); // 페이지당 6개 주식 표시
+
+  // 로그인 상태 및 프로필 정보
+  const { lastProfileId } = useLoginStore();
 
   // 실시간 주식 데이터 훅 사용
   const {
@@ -22,6 +26,15 @@ const Stocks = () => {
     lastUpdate,
     isUpdating
   } = useRealtimeStocks();
+
+  // 관심종목 훅 사용
+  const {
+    watchlist,
+    loading: watchlistLoading,
+    error: watchlistError,
+    toggleWatchlist,
+    isInWatchlist
+  } = useWatchlist(lastProfileId);
 
   const newsItems = [
     {
@@ -114,16 +127,16 @@ const Stocks = () => {
     setSelectedStocks(selectedStocks.filter((s) => s.symbol !== symbol));
   };
 
-  const toggleFavorite = (symbol) => {
-    setFavoriteStocks((prev) => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(symbol)) {
-        newFavorites.delete(symbol);
-      } else {
-        newFavorites.add(symbol);
-      }
-      return newFavorites;
-    });
+  const handleToggleFavorite = async (symbol) => {
+    if (!lastProfileId) {
+      alert('로그인이 필요합니다');
+      return;
+    }
+    
+    const success = await toggleWatchlist(symbol);
+    if (!success) {
+      alert('관심종목 토글에 실패했습니다');
+    }
   };
 
   // 필터링된 주식 목록
@@ -469,13 +482,14 @@ const Stocks = () => {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleFavorite(stock.symbol);
+                          handleToggleFavorite(stock.symbol);
                         }}
                         className="p-1 hover:bg-slate-600 rounded-full transition-colors"
+                        disabled={watchlistLoading}
                       >
                         <Heart
                           className={`w-5 h-5 ${
-                            favoriteStocks.has(stock.symbol)
+                            isInWatchlist(stock.symbol)
                               ? "text-red-500 fill-red-500"
                               : "text-gray-400"
                           }`}
@@ -536,8 +550,38 @@ const Stocks = () => {
         ) : (
           /* 관심종목 목록 */
           <div className="px-4 py-2">
+            {watchlistError && (
+              <div className="mb-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{watchlistError}</span>
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-2">
-              {favoriteStocks.size === 0 ? (
+              {watchlistLoading ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-slate-800 rounded-xl animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-700 rounded-lg"></div>
+                        <div>
+                          <div className="h-4 bg-slate-700 rounded w-20 mb-2"></div>
+                          <div className="h-3 bg-slate-700 rounded w-16"></div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="h-4 bg-slate-700 rounded w-16 mb-2"></div>
+                          <div className="h-3 bg-slate-700 rounded w-12"></div>
+                        </div>
+                        <div className="w-6 h-6 bg-slate-700 rounded-full"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : watchlist.size === 0 ? (
                 <div className="text-center py-8">
                   <Heart className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-400 text-sm">관심종목이 없습니다</p>
@@ -547,11 +591,12 @@ const Stocks = () => {
                 </div>
               ) : (
                 stocks
-                  .filter((stock) => favoriteStocks.has(stock.symbol))
+                  .filter((stock) => isInWatchlist(stock.symbol))
                   .map((stock, index) => (
                     <div
                       key={index}
                       className="flex items-center justify-between p-3 bg-slate-800 rounded-xl cursor-pointer hover:bg-slate-700 transition-colors"
+                      onClick={() => handleStockSelect(stock)}
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-lg overflow-hidden">
@@ -594,7 +639,7 @@ const Stocks = () => {
                             </p>
                             <p
                               className={`text-xs ${
-                                stock.changePercent.includes("+")
+                                stock.changePercent && stock.changePercent.includes("+")
                                   ? "text-red-500"
                                   : "text-blue-500"
                               }`}
@@ -604,8 +649,12 @@ const Stocks = () => {
                           </div>
                         </div>
                         <button
-                          onClick={() => toggleFavorite(stock.symbol)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(stock.symbol);
+                          }}
                           className="p-1 hover:bg-slate-600 rounded-full transition-colors"
+                          disabled={watchlistLoading}
                         >
                           <Heart className="w-5 h-5 text-red-500 fill-red-500" />
                         </button>
