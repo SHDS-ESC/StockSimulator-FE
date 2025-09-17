@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, X, Heart, BarChart3, TrendingUp, LogIn, LogOut } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
+import useRealtimeStocks from "../hooks/useRealtimeStocks";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -11,6 +12,15 @@ const HomePage = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
+
+  // 실시간 주식 데이터 훅 사용
+  const {
+    stocks,
+    loading: stocksLoading,
+    error: stocksError,
+    lastUpdate,
+    isUpdating
+  } = useRealtimeStocks();
 
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
@@ -84,48 +94,19 @@ const HomePage = () => {
       });
   };
 
-  const stocks = [
-    {
-      symbol: "AAPL",
-      name: "애플",
-      price: "$238.69",
-      change: "-0.2%",
-      changeAmount: "-$0.48",
-      logo: "🍎",
-    },
-    {
-      symbol: "MMM",
-      name: "3M",
-      price: "$155.30",
-      change: "-0.1%",
-      changeAmount: "-$0.16",
-      logo: "3️⃣",
-    },
-    {
-      symbol: "NFLX",
-      name: "넷플릭스",
-      price: "$1,243.82",
-      change: "+0.8%",
-      changeAmount: "+$9.87",
-      logo: "🎬",
-    },
-    {
-      symbol: "TSLA",
-      name: "테슬라",
-      price: "$245.67",
-      change: "+2.3%",
-      changeAmount: "+$5.52",
-      logo: "🚗",
-    },
-    {
-      symbol: "NVDA",
-      name: "엔비디아",
-      price: "$456.23",
-      change: "+3.2%",
-      changeAmount: "+$14.15",
-      logo: "🎮",
-    },
-  ];
+  // 등락률 순으로 정렬된 상위 3개 주식
+  const topRisingStocks = useMemo(() => {
+    if (!stocks || stocks.length === 0) return [];
+    
+    return stocks
+      .filter(stock => stock.change && stock.changePercent) // 유효한 데이터만 필터링
+      .sort((a, b) => {
+        const changeA = parseFloat(a.change.replace('%', ''));
+        const changeB = parseFloat(b.change.replace('%', ''));
+        return changeB - changeA; // 높은 등락률순
+      })
+      .slice(0, 3); // 상위 3개만
+  }, [stocks]);
 
   const handleCreateProfile = () => {
     // Character 페이지로 이동
@@ -217,47 +198,17 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* 보유 주식 섹션 */}
+      {/* 보유 주식 섹션 - 현재는 빈 상태 */}
       <div className="bg-slate-950 px-4 py-2">
         <div className="bg-slate-800 rounded-xl p-3">
           <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
           <div className="space-y-2">
-            {stocks.map((stock, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                    <img
-                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                      alt={stock.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
-                    />
-                    <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.symbol}
-                    </span>
-                  </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">
-                      {stock.name}
-                    </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-white font-semibold text-sm">
-                    {stock.price}
-                  </p>
-                  <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                  >
-                    {stock.change}
-                  </p>
-                </div>
-              </div>
-            ))}
+            <div className="text-center py-8">
+              <p className="text-gray-400 text-sm">보유 주식이 없습니다</p>
+              <p className="text-gray-500 text-xs mt-1">
+                주식을 구매하여 포트폴리오를 구성해보세요
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -268,50 +219,96 @@ const HomePage = () => {
           <h3 className="text-white text-lg font-semibold mb-3">
             실시간 급상승 종목
           </h3>
-          <div className="space-y-2">
-            {stocks.slice(0, 3).map((stock, index) => (
-              <div
-                key={`trending-${index}`}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                    <img
-                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                      alt={stock.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
-                    />
-                    <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.symbol}
-                    </span>
+          {stocksLoading ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, index) => (
+                <div key={index} className="flex items-center justify-between p-2 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-700 rounded-lg"></div>
+                    <div>
+                      <div className="h-4 bg-slate-700 rounded w-20 mb-1"></div>
+                      <div className="h-3 bg-slate-700 rounded w-16"></div>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">
-                      {stock.name}
-                    </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                  <div className="text-right">
+                    <div className="h-4 bg-slate-700 rounded w-16 mb-1"></div>
+                    <div className="h-3 bg-slate-700 rounded w-12"></div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-white font-semibold text-sm">
-                    {stock.price}
-                  </p>
-                  <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                  >
-                    {stock.change}
-                  </p>
+              ))}
+            </div>
+          ) : stocksError ? (
+            <div className="text-center py-4">
+              <p className="text-red-400 text-sm">{stocksError}</p>
+            </div>
+          ) : topRisingStocks.length === 0 ? (
+            <div className="text-center py-4">
+              <p className="text-gray-400 text-sm">데이터를 불러올 수 없습니다</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {topRisingStocks.map((stock, index) => (
+                <div
+                  key={`trending-${stock.symbol}-${index}`}
+                  className="flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                      <img
+                        src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                        alt={stock.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                      <span className="text-gray-600 font-bold text-xs hidden">
+                        {stock.symbol}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-medium text-sm">
+                        {stock.name}
+                      </h4>
+                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-sm">
+                      {stock.price.startsWith('$') ? stock.price : `$${stock.price}`}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <p
+                        className={`text-xs font-medium ${
+                          stock.change.includes("+")
+                            ? "text-red-500"
+                            : "text-blue-500"
+                        }`}
+                      >
+                        {stock.change}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          stock.changePercent && stock.changePercent.includes("+")
+                            ? "text-red-500"
+                            : "text-blue-500"
+                        }`}
+                      >
+                        ({stock.changePercent})
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           {/* 더 많은 주식목록보기 버튼 */}
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <button className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-gray-50 rounded-lg transition-colors">
+          <div className="mt-3 pt-3 border-t border-slate-600">
+            <button 
+              onClick={() => navigate('/stocks')}
+              className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
+            >
               더 많은 주식목록보기
             </button>
           </div>
