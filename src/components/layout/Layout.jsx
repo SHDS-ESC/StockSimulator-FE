@@ -13,9 +13,14 @@ import {
   X,
   Settings,
 } from "lucide-react";
+import useDateStore from "@/store/useDateStore";
+import { Button } from "../ui/button";
 
 // Header 컴포넌트
 export const Header = () => {
+  const { currentDate, initToday, goNextTurn, setCurrentDate } =
+    useDateStore();
+  console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -23,17 +28,21 @@ export const Header = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-
   const handleRedisTestClick = () => {
     navigate("/redis-test");
     setIsMenuOpen(false);
   };
 
+  const handleNextButtonClick = () => {
+    goNextTurn()
+  }
+
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-      <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
+     <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
+  {/* 왼쪽 */}
+  <div className="flex justify-start">
+      <button
             onClick={toggleMenu}
             className="w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"
           >
@@ -43,11 +52,21 @@ export const Header = () => {
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
-        </div>
-        <h1 className="text-white text-lg font-bold">FINT</h1>
-        <User className="w-6 h-6 text-white" />
-      </div>
-      
+  </div>
+
+  {/* 가운데 - 자동으로 완전 중앙 */}
+  <h1 className="text-white text-lg font-bold text-center">
+    {currentDate}
+  </h1>
+
+  {/* 오른쪽 */}
+  <div className="flex justify-end">
+    <Button onClick={handleNextButtonClick} className="m-0" variant="confirm">
+      턴 종료
+    </Button>
+  </div>
+</div>
+
       {/* 드롭다운 메뉴 */}
       {isMenuOpen && (
         <div className="absolute top-full left-0 w-full bg-slate-800 border-t border-slate-700 shadow-lg">
@@ -145,19 +164,6 @@ export const Footer = () => {
           <CircleUserRound className="w-6 h-6" />
         </button>
       </div>
-    </div>
-  );
-};
-
-// PageHeader 컴포넌트
-export const PageHeader = ({ title, subtitle, children, className = "" }) => {
-  return (
-    <div className={`px-4 py-2 ${className}`}>
-      <h1 className="text-white text-2xl font-bold">{title}</h1>
-      {subtitle && (
-        <p className="text-gray-400 text-sm mt-1">{subtitle}</p>
-      )}
-      {children}
     </div>
   );
 };
