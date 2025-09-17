@@ -21,6 +21,14 @@ const HomePage = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
+  const [selectedProfile, setSelectedProfile] = useState({
+    id: 0,
+    totalInvested: 0,
+    totalAssets: 0,
+    cashBalance: 0,
+    nickname: "프로필을 선택해주세요",
+    state: true,
+  });
 
   // 실시간 주식 데이터 훅 사용
   const {
@@ -31,14 +39,89 @@ const HomePage = () => {
     isUpdating
   } = useRealtimeStocks();
 
-  const [selectedProfile, setSelectedProfile] = useState({
-    id: 0,
-    totalInvested: 0,
-    totalAssets: 0,
-    cashBalance: 0,
-    nickname: "프로필을 선택해주세요",
-    state: true,
-  });
+  // 타임라인 기반 과거 모드 여부 판별 (프로필 변경/턴 변경에 반응)
+  const { currentDate } = useDateStore();
+  const isRealtime = useMemo(() => {
+    const name = String(selectedProfile?.name || '').trim();
+    const d = String(currentDate || selectedProfile?.processDate || '');
+    return name === '실시간' || d.startsWith('0000');
+  }, [selectedProfile?.name, currentDate, selectedProfile?.processDate]);
+  const isHistorical = !isRealtime;
+  const simDate = useMemo(() => {
+    if (!isHistorical) return null;
+    const d = new Date(currentDate || selectedProfile?.processDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+  }, [isHistorical, currentDate, selectedProfile?.processDate]);
+
+  // 과거 모드: 해당 날짜 기준 급상승 종목 계산 (종가 vs 전일 종가)
+  const [histTop, setHistTop] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histError, setHistError] = useState(null);
+  const [histCache, setHistCache] = useState({}); // 날짜별 캐시
+
+  useEffect(() => {
+    if (!isHistorical) { setHistTop([]); setHistLoading(false); setHistError(null); return; }
+    
+    // 캐시 키 생성
+    const cacheKey = `${simDate?.year}-${simDate?.month}-${simDate?.day}`;
+    if (histCache[cacheKey]) {
+      setHistTop(histCache[cacheKey]);
+      setHistLoading(false);
+      return;
+    }
+    
+    const run = async () => {
+      setHistLoading(true); setHistError(null);
+      try {
+        const base = new Date(Date.UTC(simDate.year, simDate.month - 1, simDate.day));
+        const selectedEpoch = Math.floor(base.getTime() / 1000);
+        const prevEpoch = selectedEpoch - 86400;
+        const curFrom = prevEpoch;
+        const curTo = selectedEpoch + 86400 * 7;
+        const prevFrom = prevEpoch - 86400 * 7;
+        const prevTo = prevEpoch;
+        const list = Array.isArray(stocks) ? stocks : [];
+        const symbols = list.map(s => s.symbol).filter(Boolean).slice(0, 150); // 과도한 호출 방지 제한
+        const results = await Promise.allSettled(symbols.map(async (sym) => {
+          const [curRes, prevRes] = await Promise.all([
+            axiosInstance.get('/db/candles', { params: { ticker: sym, from: curFrom, to: curTo } }),
+            axiosInstance.get('/db/candles', { params: { ticker: sym, from: prevFrom, to: prevTo } }),
+          ]);
+          const curT = curRes?.value?.data?.t || curRes?.data?.t || [];
+          const curC = curRes?.value?.data?.c || curRes?.data?.c || [];
+          let currentClose = null;
+          for (let i = 0; i < curT.length; i++) { if (curT[i] >= selectedEpoch) { currentClose = curC[i]; break; } }
+          const prevT = prevRes?.value?.data?.t || prevRes?.data?.t || [];
+          const prevC = prevRes?.value?.data?.c || prevRes?.data?.c || [];
+          let prevClose = null;
+          for (let i = prevT.length - 1; i >= 0; i--) { if (prevT[i] <= prevEpoch) { prevClose = prevC[i]; break; } }
+          if (typeof currentClose !== 'number' || typeof prevClose !== 'number') return null;
+          const chg = currentClose - prevClose;
+          const pct = prevClose !== 0 ? (chg / prevClose) * 100 : 0;
+          const meta = list.find(s => s.symbol === sym) || { name: sym };
+          return {
+            symbol: sym,
+            name: meta.name || sym,
+            price: `$${currentClose.toFixed(2)}`,
+            change: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}`,
+            changePercent: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`,
+          };
+        }));
+        const rows = results.map(r => (r.status === 'fulfilled' ? r.value : null)).filter(Boolean);
+        rows.sort((a, b) => parseFloat(String(b.changePercent).replace('%','')) - parseFloat(String(a.changePercent).replace('%','')));
+        const top3 = rows.slice(0, 3);
+        setHistTop(top3);
+        setHistCache(prev => ({ ...prev, [cacheKey]: top3 }));
+      } catch (_) {
+        setHistTop([]); setHistError('과거 데이터 계산 실패');
+      } finally {
+        setHistLoading(false);
+      }
+    };
+    run();
+  }, [isHistorical, simDate?.year, simDate?.month, simDate?.day, stocks, selectedProfile?.id, histCache]);
+
 
   useConfirmLogin(null);
   // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
@@ -101,22 +184,35 @@ const HomePage = () => {
         console.log("프로필 선택 성공:", res.data.id);
         setSelectedProfile(profile);
         useLoginStore.setState({ lastProfileId: profile.id });
+        try {
+          localStorage.setItem("newProfile", JSON.stringify(profile));
+          if (profile?.processDate) setCurrentDate(profile.processDate);
+        } catch (_) { /* ignore */ }
+        // 프로필 변경 시 급상승 종목 즉시 재계산 트리거
+        setTimeout(() => {
+          // selectedProfile/processDate 변경과 currentDate 설정에 의해 useEffect가 재실행됨
+        }, 0);
         setTimeout(() => setIsProfileModalOpen(false), 200);
       });
   };
 
   // 등락률 순으로 정렬된 상위 3개 주식
   const topRisingStocks = useMemo(() => {
-    if (!stocks || stocks.length === 0) return [];
-
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(String(val || '').replace('%', '').replace('+',''));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
     return stocks
-      .filter(stock => stock.change && stock.changePercent) // 유효한 데이터만 필터링
-      .sort((a, b) => {
-        const changeA = parseFloat(a.change.replace('%', ''));
-        const changeB = parseFloat(b.change.replace('%', ''));
-        return changeB - changeA; // 높은 등락률순
-      })
-      .slice(0, 3); // 상위 3개만
+      .map(s => ({
+        ...s,
+        price: String(s?.price ?? ''),
+        change: String(s?.change ?? ''),
+        changePercent: String(s?.changePercent ?? ''),
+      }))
+      .filter(s => s.changePercent && toPct(s.changePercent) !== -Infinity)
+      .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
+      .slice(0, 3);
   }, [stocks]);
 
   const handleCreateProfile = () => {
@@ -235,7 +331,7 @@ const HomePage = () => {
           <h3 className="text-white text-lg font-semibold mb-3">
             실시간 급상승 종목
           </h3>
-          {stocksLoading ? (
+          {(isHistorical ? histLoading : stocksLoading) ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
                 <div key={index} className="flex items-center justify-between p-2 animate-pulse">
@@ -253,17 +349,17 @@ const HomePage = () => {
                 </div>
               ))}
             </div>
-          ) : stocksError ? (
+          ) : (isHistorical ? histError : stocksError) ? (
             <div className="text-center py-4">
-              <p className="text-red-400 text-sm">{stocksError}</p>
+              <p className="text-red-400 text-sm">{isHistorical ? histError : stocksError}</p>
             </div>
-          ) : topRisingStocks.length === 0 ? (
+          ) : (isHistorical ? histTop.length === 0 : topRisingStocks.length === 0) ? (
             <div className="text-center py-4">
               <p className="text-gray-400 text-sm">데이터를 불러올 수 없습니다</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {topRisingStocks.map((stock, index) => (
+              {(isHistorical ? histTop : topRisingStocks).map((stock, index) => (
                 <div
                   key={`trending-${stock.symbol}-${index}`}
                   className="flex items-center justify-between"
@@ -292,26 +388,26 @@ const HomePage = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-white font-semibold text-sm">
-                      {stock.price.startsWith('$') ? stock.price : `$${stock.price}`}
+                      {String(stock.price).startsWith('$') ? String(stock.price) : `$${String(stock.price)}`}
                     </p>
                     <div className="flex items-center gap-1">
                       <p
                         className={`text-xs font-medium ${
-                          stock.change.includes("+")
+                          String(stock.change).includes("+")
                             ? "text-red-500"
                             : "text-blue-500"
                         }`}
                       >
-                        {stock.change}
+                        {String(stock.change)}
                       </p>
                       <p
                         className={`text-xs ${
-                          stock.changePercent && stock.changePercent.includes("+")
+                          String(stock.changePercent || '').includes("+")
                             ? "text-red-500"
                             : "text-blue-500"
                         }`}
                       >
-                        ({stock.changePercent})
+                        ({String(stock.changePercent)})
                       </p>
                     </div>
                   </div>
