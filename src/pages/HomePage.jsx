@@ -12,9 +12,11 @@ import {
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
+import useDateStore from "@/store/useDateStore";
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
