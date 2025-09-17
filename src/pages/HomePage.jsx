@@ -1,14 +1,23 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, X, Heart, BarChart3, TrendingUp, LogIn, LogOut } from "lucide-react";
+import {
+  ChevronRight,
+  X,
+  Heart,
+  BarChart3,
+  TrendingUp,
+  LogIn,
+  LogOut,
+} from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
 import useRealtimeStocks from "../hooks/useRealtimeStocks";
+import useDateStore from "@/store/useDateStore";
 
 const HomePage = () => {
   const navigate = useNavigate();
-
+  const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
@@ -45,9 +54,11 @@ const HomePage = () => {
           );
           setSelectedProfile(response.data);
           localStorage.setItem("newProfile", JSON.stringify(response.data));
+          setCurrentDate(response.data.processDate)
         } catch (e) {
           console.error("Error fetching active profile:", e);
-          if (Array.isArray(list) && list.length > 0) setSelectedProfile(list[0]);
+          if (Array.isArray(list) && list.length > 0)
+            setSelectedProfile(list[0]);
         }
       } else if (Array.isArray(list) && list.length > 0) {
         setSelectedProfile(list[0]);
@@ -97,7 +108,7 @@ const HomePage = () => {
   // 등락률 순으로 정렬된 상위 3개 주식
   const topRisingStocks = useMemo(() => {
     if (!stocks || stocks.length === 0) return [];
-    
+
     return stocks
       .filter(stock => stock.change && stock.changePercent) // 유효한 데이터만 필터링
       .sort((a, b) => {
@@ -117,7 +128,9 @@ const HomePage = () => {
   const handleLogout = async () => {
     try {
       await axiosInstance.post("/user/logout");
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
     clear();
     sessionStorage.removeItem("accessToken");
     navigate("/");
@@ -140,7 +153,10 @@ const HomePage = () => {
       {/* 상단 로그인/로그아웃 액션 (상태에 따라 토글) */}
       <div className="px-4 mb-3 flex gap-2">
         {sessionStorage.getItem("accessToken") ? (
-          <button onClick={handleLogout} className="px-3 py-2 rounded-lg bg-slate-800 text-white flex items-center gap-2">
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-lg bg-slate-800 text-white flex items-center gap-2"
+          >
             <LogOut size={16} /> 로그아웃
           </button>
         ) : null}
@@ -160,7 +176,7 @@ const HomePage = () => {
               {selectedProfile?.nickname}
             </h2>
             <span className="text-gray-400 text-sm">
-              {selectedProfile  
+              {selectedProfile
                 ? "TimeLine : " + selectedProfile.name
                 : "TimeLine : 없음"}
             </span>
@@ -305,7 +321,7 @@ const HomePage = () => {
           )}
           {/* 더 많은 주식목록보기 버튼 */}
           <div className="mt-3 pt-3 border-t border-slate-600">
-            <button 
+            <button
               onClick={() => navigate('/stocks')}
               className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
             >
