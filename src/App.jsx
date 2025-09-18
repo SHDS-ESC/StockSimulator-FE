@@ -14,8 +14,11 @@ import TradePage from "./pages/trade/TradePage";
 import StockLive from "./pages/trade/StockLive";
 import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
+import useDateStore from "@/store/useDateStore";
 
 function App() {
+  const { isTurnOver } = useDateStore();
+
   return (
     <div className="min-h-screen flex flex-col items-center relative">
       <AnimatedBackground />
@@ -25,6 +28,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/trade" element={<TradePage />} />
+            <Route path="/stocks/:symbol" element={<StockLive />} />
             <Route path="/stocks/live/:symbol" element={<StockLive />} />
             <Route path="/home" element={<HomePage />} />
             <Route path="/character" element={<Character />} />
@@ -36,6 +40,23 @@ function App() {
             <Route path="/redis-test" element={<RedisTest />} />
           </Routes>
         </div>
+        {/* TurnOver 팝업 */}
+        {isTurnOver && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+            <div className="bg-white rounded-2xl p-8 w-[90%] max-w-lg shadow-xl">
+              <h2 className="text-2xl font-bold mb-4">Turn Over!</h2>
+              <p className="mb-6 text-gray-700">
+                포트폴리오를 보여줄 팝업 내용입니다.
+              </p>
+              <button
+                onClick={() => useDateStore.setState({ isTurnOver: false })}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-white"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <Footer />
     </div>

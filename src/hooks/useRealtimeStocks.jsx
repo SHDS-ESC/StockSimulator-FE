@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import axiosInstance from '../util/axiosInstance';
 
-const useRealtimeStocks = () => {
+const useRealtimeStocks = (options = {}) => {
+  const { enabled = true } = options;
   const [stocks, setStocks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -69,8 +70,12 @@ const useRealtimeStocks = () => {
 
   // 초기 데이터 로드
   useEffect(() => {
-    fetchAllStocks();
-  }, [fetchAllStocks]);
+    if (enabled) {
+      fetchAllStocks();
+    } else {
+      setLoading(false);
+    }
+  }, [fetchAllStocks, enabled]);
 
   // 자동 갱신 비활성화 - 스케줄러가 알아서 갱신
 

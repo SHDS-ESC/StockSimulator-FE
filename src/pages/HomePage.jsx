@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight,
@@ -12,10 +12,12 @@ import {
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
+import useRealtimeStocks from "../hooks/useRealtimeStocks";
 import useDateStore from "@/store/useDateStore";
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const [holdingStocks, setHoldingStocks] = useState([]);
   const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -29,13 +31,84 @@ const HomePage = () => {
     state: true,
   });
 
+  // 실시간 주식 데이터 훅 사용
+  const {
+    stocks,
+    loading: stocksLoading,
+    error: stocksError,
+    lastUpdate,
+    isUpdating
+  } = useRealtimeStocks({ enabled: true });
+
+  // 타임라인 기반 과거 모드 여부 판별 (프로필 변경/턴 변경에 반응)
+  const { currentDate } = useDateStore();
+  const isRealtime = useMemo(() => {
+    // 1) 백엔드 DTO의 timelineId가 오면 그것으로 판별 (권장)
+    if (selectedProfile?.timelineId != null) {
+      return Number(selectedProfile.timelineId) === 9;
+    }
+    // 2) 마지막 백업: 기존 로직 유지(임시 호환)
+    const name = String(selectedProfile?.name || '').toLowerCase();
+    const stateRealtime = selectedProfile?.state === true;
+    return stateRealtime || name.includes('실시간');
+  }, [selectedProfile?.timelineId, selectedProfile?.name, selectedProfile?.state]);
+  const isHistorical = !isRealtime;
+  const simDate = useMemo(() => {
+    if (!isHistorical) return null;
+    const d = new Date(currentDate || selectedProfile?.processDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+  }, [isHistorical, currentDate, selectedProfile?.processDate]);
+  const dateKey = useMemo(() => {
+    if (!isHistorical) return null;
+    const y = String(simDate?.year || '');
+    const m = String(simDate?.month || '').padStart(2, '0');
+    const d = String(simDate?.day || '').padStart(2, '0');
+    if (!y || !m || !d) return null;
+    return `${y}-${m}-${d}`;
+  }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
+
+  // 과거 모드: 해당 날짜 기준 급상승 종목 계산 (종가 vs 전일 종가)
+  const [histTop, setHistTop] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histError, setHistError] = useState(null);
+  const [histCache, setHistCache] = useState({}); // 날짜별 캐시
+
+  useEffect(() => {
+    if (!isHistorical || !dateKey) { setHistTop([]); setHistLoading(false); setHistError(null); return; }
+
+    if (histCache[dateKey]) {
+      setHistTop(histCache[dateKey]);
+      setHistLoading(false);
+      return;
+    }
+
+    const run = async () => {
+      setHistLoading(true); setHistError(null);
+      try {
+        const resp = await axiosInstance.get('/db/snapshot', { params: { date: dateKey, page: 1, size: 3, sort: 'changePercent,desc' } });
+        const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+        setHistTop(rows);
+        setHistCache(prev => ({ ...prev, [dateKey]: rows }));
+      } catch (_) {
+        setHistTop([]); setHistError('과거 데이터 계산 실패');
+      } finally {
+        setHistLoading(false);
+      }
+    };
+    run();
+  }, [isHistorical, dateKey, histCache]);
+
+
   useConfirmLogin(null);
   // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
   const loadProfile = async () => {
     try {
       const list = await fetchProfiles();
+      const stcokList = await fetchStocks();
       // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
       if (lastProfileId && Number(lastProfileId) > 0) {
+        setHoldingStocks(stcokList);
         try {
           const response = await axiosInstance.get(
             `userprofile/profile/${lastProfileId}`,
@@ -43,7 +116,7 @@ const HomePage = () => {
           );
           setSelectedProfile(response.data);
           localStorage.setItem("newProfile", JSON.stringify(response.data));
-          setCurrentDate(response.data.processDate)
+          setCurrentDate(response.data.processDate);
         } catch (e) {
           console.error("Error fetching active profile:", e);
           if (Array.isArray(list) && list.length > 0)
@@ -73,10 +146,31 @@ const HomePage = () => {
       return [];
     }
   };
-  useEffect(() => {
-    if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
-    loadProfile();
-  }, [email, lastProfileId]);
+
+  // 보유 주식 리스트 불러오기
+  const fetchStocks = async () => {
+    if (!email || String(email).trim() === "") return [];
+    try {
+      const response = await axiosInstance.get(
+        `holdings/stocks/${lastProfileId}`,
+        { withCredentials: true }
+      );
+      const stockList = response.data || [];
+      setHoldingStocks(stockList);
+      return stockList;
+    } catch (error) {
+      console.error("Error fetching profiles:", error);
+      return [];
+    }
+  };
+
+  useEffect(
+    () => {
+      if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
+      loadProfile();
+    },
+    [email, lastProfileId]
+  );
 
   // 프로필 선택
   const handleProfileSelect = (profile) => {
@@ -90,59 +184,42 @@ const HomePage = () => {
         console.log("프로필 선택 성공:", res.data.id);
         setSelectedProfile(profile);
         useLoginStore.setState({ lastProfileId: profile.id });
+        try {
+          localStorage.setItem("newProfile", JSON.stringify(profile));
+          if (profile?.processDate) setCurrentDate(profile.processDate);
+        } catch (_) { /* ignore */ }
+        // 프로필 변경 시 급상승 종목 즉시 재계산 트리거
+        setTimeout(() => {
+          // selectedProfile/processDate 변경과 currentDate 설정에 의해 useEffect가 재실행됨
+        }, 0);
         setTimeout(() => setIsProfileModalOpen(false), 200);
       });
   };
 
-  const stocks = [
-    {
-      symbol: "AAPL",
-      name: "애플",
-      price: "$238.69",
-      change: "-0.2%",
-      changeAmount: "-$0.48",
-      logo: "🍎",
-    },
-    {
-      symbol: "MMM",
-      name: "3M",
-      price: "$155.30",
-      change: "-0.1%",
-      changeAmount: "-$0.16",
-      logo: "3️⃣",
-    },
-    {
-      symbol: "NFLX",
-      name: "넷플릭스",
-      price: "$1,243.82",
-      change: "+0.8%",
-      changeAmount: "+$9.87",
-      logo: "🎬",
-    },
-    {
-      symbol: "TSLA",
-      name: "테슬라",
-      price: "$245.67",
-      change: "+2.3%",
-      changeAmount: "+$5.52",
-      logo: "🚗",
-    },
-    {
-      symbol: "NVDA",
-      name: "엔비디아",
-      price: "$456.23",
-      change: "+3.2%",
-      changeAmount: "+$14.15",
-      logo: "🎮",
-    },
-  ];
+  // 등락률 순으로 정렬된 상위 3개 주식
+  const topRisingStocks = useMemo(() => {
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(String(val || '').replace('%', '').replace('+',''));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    return stocks
+      .map(s => ({
+        ...s,
+        price: String(s?.price ?? ''),
+        change: String(s?.change ?? ''),
+        changePercent: String(s?.changePercent ?? ''),
+      }))
+      .filter(s => s.changePercent && toPct(s.changePercent) !== -Infinity)
+      .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
+      .slice(0, 3);
+  }, [stocks]);
 
   const handleCreateProfile = () => {
     // Character 페이지로 이동
     navigate("/character");
   };
 
-  const handleGoLogin = () => navigate("/login");
   const handleLogout = async () => {
     try {
       await axiosInstance.post("/user/logout");
@@ -237,38 +314,36 @@ const HomePage = () => {
         <div className="bg-slate-800 rounded-xl p-3">
           <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
           <div className="space-y-2">
-            {stocks.map((stock, index) => (
+            {holdingStocks.map((stock, index) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    {/* 이미지 */}
                     <img
-                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      src={stock.logo}
                       alt={stock.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
                     />
+                    {/* */}
                     <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.symbol}
+                      {stock.ticker}
                     </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
                       {stock.name}
                     </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                    <p className="text-gray-400 text-xs">{stock.ticker}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-white font-semibold text-sm">
-                    {stock.price}
+                    $ {stock.price}
                   </p>
                   <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
+                    className={`text-xs ${stock.change > 0 ? "text-red-500" : "text-blue-400"}`}
                   >
-                    {stock.change}
+                    $ {stock.change}%
                   </p>
                 </div>
               </div>
@@ -283,50 +358,96 @@ const HomePage = () => {
           <h3 className="text-white text-lg font-semibold mb-3">
             실시간 급상승 종목
           </h3>
-          <div className="space-y-2">
-            {stocks.slice(0, 3).map((stock, index) => (
-              <div
-                key={`trending-${index}`}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                    <img
-                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                      alt={stock.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
-                    />
-                    <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.symbol}
-                    </span>
+          {(isHistorical ? histLoading : stocksLoading) ? (
+            <div className="space-y-2">
+              {[...Array(3)].map((_, index) => (
+                <div key={index} className="flex items-center justify-between p-2 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-slate-700 rounded-lg"></div>
+                    <div>
+                      <div className="h-4 bg-slate-700 rounded w-20 mb-1"></div>
+                      <div className="h-3 bg-slate-700 rounded w-16"></div>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">
-                      {stock.name}
-                    </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                  <div className="text-right">
+                    <div className="h-4 bg-slate-700 rounded w-16 mb-1"></div>
+                    <div className="h-3 bg-slate-700 rounded w-12"></div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-white font-semibold text-sm">
-                    {stock.price}
-                  </p>
-                  <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                  >
-                    {stock.change}
-                  </p>
+              ))}
+            </div>
+          ) : (isHistorical ? histError : stocksError) ? (
+            <div className="text-center py-4">
+              <p className="text-red-400 text-sm">{isHistorical ? histError : stocksError}</p>
+            </div>
+          ) : (isHistorical ? histTop.length === 0 : topRisingStocks.length === 0) ? (
+            <div className="text-center py-4">
+              <p className="text-gray-400 text-sm">{isHistorical ? '데이터를 불러올 수 없습니다' : '실시간 데이터 준비중'}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(isHistorical ? histTop : topRisingStocks).map((stock, index) => (
+                <div
+                  key={`trending-${stock.symbol}-${index}`}
+                  className="flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                      <img
+                        src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                        alt={stock.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                      <span className="text-gray-600 font-bold text-xs hidden">
+                        {stock.symbol}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-medium text-sm">
+                        {stock.name}
+                      </h4>
+                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-sm">
+                      {String(stock.price).startsWith('$') ? String(stock.price) : `$${String(stock.price)}`}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <p
+                        className={`text-xs font-medium ${
+                          String(stock.change).includes("+")
+                            ? "text-red-500"
+                            : "text-blue-500"
+                        }`}
+                      >
+                        {String(stock.change)}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          String(stock.changePercent || '').includes("+")
+                            ? "text-red-500"
+                            : "text-blue-500"
+                        }`}
+                      >
+                        ({String(stock.changePercent)})
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
           {/* 더 많은 주식목록보기 버튼 */}
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <button className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-gray-50 rounded-lg transition-colors">
+          <div className="mt-3 pt-3 border-t border-slate-600">
+            <button
+              onClick={() => navigate('/stocks')}
+              className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
+            >
               더 많은 주식목록보기
             </button>
           </div>

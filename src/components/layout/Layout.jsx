@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import useDateStore from "@/store/useDateStore";
 import { Button } from "../ui/button";
-
+import axiosInstance from "@/util/axiosInstance";
+import useLoginStore from "@/store/useLoginStore";
 // Header 컴포넌트
 export const Header = () => {
-  const { currentDate, initToday, goNextTurn, setCurrentDate } = useDateStore();
+  const { currentDate, goNextTurn } = useDateStore();
+  const { lastProfileId } = useLoginStore();
   console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -32,8 +34,25 @@ export const Header = () => {
     setIsMenuOpen(false);
   };
 
-  const handleNextButtonClick = () => {
-    goNextTurn();
+  const handleNextButtonClick = async () => {
+    const currentDateObj = new Date(currentDate);
+    currentDateObj.setDate(currentDateObj.getDate() + 1);
+    const updateDate = goNextTurn(currentDateObj);
+    try {
+      await axiosInstance.post(
+        "/userprofile/update/process-date",
+        {
+          userProfileId: lastProfileId,
+          processDate: updateDate,
+        },
+        { withCredentials: true }
+      );
+    } catch (e) {
+      console.log(e);
+      /* ignore */
+    } finally {
+      console.log("업데이트 날짜" + updateDate);
+    }
   };
 
   return (
