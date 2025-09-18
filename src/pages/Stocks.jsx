@@ -21,24 +21,40 @@ const Stocks = () => {
 	const profile = useMemo(() => {
 		try { return JSON.parse(localStorage.getItem("newProfile") || "null"); } catch (_) { return null; }
 	}, [lastProfileId]);
+	// 실시간 여부: 백엔드 DTO의 timelineId 기준(실시간=9)
+	const isRealtime = useMemo(() => {
+		if (profile?.timelineId != null) {
+			return Number(profile.timelineId) === 9;
+		}
+		return false;
+	}, [profile?.timelineId]);
+
+	const isHistorical = !isRealtime;
 	const timelineFrom = profile?.timelineFrom || null;
 	const simDate = useMemo(() => {
+		if (!isHistorical) return null;
 		// currentDate가 있으면 우선 사용 (턴 종료로 날짜가 변경된 경우)
 		const dateToUse = currentDate || timelineFrom;
 		if (!dateToUse) return null;
 		const d = new Date(dateToUse);
 		if (Number.isNaN(d.getTime())) return null;
 		return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-	}, [currentDate, timelineFrom, lastProfileId]);
-	const isHistorical = Boolean(simDate?.year && simDate?.month && simDate?.day);
+	}, [isHistorical, currentDate, timelineFrom, lastProfileId]);
+    const dateKey = useMemo(() => {
+	        if (!isHistorical) return null;
+        const y = String(simDate.year);
+        const m = String(simDate.month).padStart(2, '0');
+        const d = String(simDate.day).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
 
 	// 실시간 주식 데이터 훅 사용
-	const {
-		stocks,
-		loading,
-		error,
-		lastUpdate
-	} = useRealtimeStocks();
+    const {
+        stocks,
+        loading,
+        error,
+        lastUpdate
+	    } = useRealtimeStocks({ enabled: !isHistorical });
 
 	// 관심종목 훅 사용
 	const {
@@ -49,6 +65,11 @@ const Stocks = () => {
 		isInWatchlist
 	} = useWatchlist(lastProfileId);
 
+	// 과거 모드 관심종목 rows (스냅샷 기반)
+	const [histFavRows, setHistFavRows] = useState([]);
+	const [histFavLoading, setHistFavLoading] = useState(false);
+	const [histFavError, setHistFavError] = useState(null);
+
 	// 과거 모드 가격 캐시
 	const [histMap, setHistMap] = useState({}); // symbol -> { price, change, changePercent }
 
@@ -56,6 +77,7 @@ const Stocks = () => {
 	useEffect(() => {
 		if (isHistorical) {
 			setHistMap({});
+			setHistFavRows([]);
 		}
 	}, [simDate?.year, simDate?.month, simDate?.day, isHistorical]);
 
@@ -81,15 +103,20 @@ const Stocks = () => {
 	};
 
 	// 주식 표시 데이터 계산 함수
-	const getStockDisplayData = (stock) => {
-		const hp = isHistorical ? histMap[stock.symbol] : null;
-		const priceText = isHistorical ? (hp?.price ?? '-') : (String(stock.price).startsWith('$') ? String(stock.price) : `$${String(stock.price)}`);
-		const changeText = isHistorical ? (hp?.change ?? '-') : String(stock.change ?? '');
-		const changePctText = isHistorical ? (hp?.changePercent ?? '-') : String(stock.changePercent ?? '');
-		const isUp = (isHistorical ? String(hp?.change || '').startsWith('+') : String(stock.change ?? '').includes("+"));
-		
-		return { priceText, changeText, changePctText, isUp };
-	};
+    const getStockDisplayData = (stock) => {
+        if (isHistorical) {
+            const priceText = String(stock?.price ?? '-');
+            const changeText = String(stock?.change ?? '-');
+            const changePctText = String(stock?.changePercent ?? '-');
+            const isUp = changeText.startsWith('+');
+            return { priceText, changeText, changePctText, isUp };
+        }
+        const priceText = (String(stock.price).startsWith('$') ? String(stock.price) : `$${String(stock.price)}`);
+        const changeText = String(stock.change ?? '');
+        const changePctText = String(stock.changePercent ?? '');
+        const isUp = String(stock.change ?? '').includes("+");
+        return { priceText, changeText, changePctText, isUp };
+    };
 
 	// 주식 카드 컴포넌트
 	const StockCard = ({ stock, index, showFavorite = true }) => {
@@ -126,7 +153,7 @@ const Stocks = () => {
 						<p className="text-white font-semibold text-lg">
 							{priceText}
 						</p>
-						<div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1">
 							<p className={`text-sm font-medium ${isUp ? "text-red-500" : "text-blue-500"}`}>
 								{changeText}
 							</p>
@@ -159,34 +186,30 @@ const Stocks = () => {
 	};
 
 	// 필터링된 주식 목록
-	const filteredStocks = useMemo(() => {
-		let filtered = stocks.filter(
-			(stock) =>
-				stock.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-				stock.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-		);
+    const filteredStocks = useMemo(() => {
+        const base = isHistorical ? (histMap.__rows || []) : stocks;
+        const q = String(searchQuery || '').toLowerCase();
+        let filtered = base.filter((stock) => {
+            const name = String(stock?.name || '').toLowerCase();
+            const sym = String(stock?.symbol || '').toLowerCase();
+            return name.includes(q) || sym.includes(q);
+        });
 
 		// 정렬 적용 (표시값 기준 정렬: 과거 모드라면 histMap 값이 있으면 그 값으로)
-		switch (selectedFilter) {
-			case "이름":
-				filtered.sort((a, b) => a.name.localeCompare(b.name));
-				break;
-			case "가격":
-				filtered.sort((a, b) => {
-					const normalizePrice = (val) => parseFloat(String(val ?? '').replace('$', '').replace(',', '')) || 0;
-					const pa = isHistorical ? normalizePrice(histMap[a.symbol]?.price) : normalizePrice(a.price);
-					const pb = isHistorical ? normalizePrice(histMap[b.symbol]?.price) : normalizePrice(b.price);
-					return pb - pa;
-				});
-				break;
-			case "등락률":
-				filtered.sort((a, b) => {
-					const normalizePercent = (val) => parseFloat(String(val ?? '0').replace('%', '')) || 0;
-					const ca = isHistorical ? normalizePercent(histMap[a.symbol]?.changePercent) : normalizePercent(a.change);
-					const cb = isHistorical ? normalizePercent(histMap[b.symbol]?.changePercent) : normalizePercent(b.change);
-					return cb - ca;
-				});
-				break;
+        switch (selectedFilter) {
+            case "이름":
+                if (!isHistorical) filtered.sort((a, b) => a.name.localeCompare(b.name));
+                break;
+            case "등락률":
+                if (!isHistorical) {
+                    filtered.sort((a, b) => {
+                        const normalizePercent = (val) => parseFloat(String(val ?? '0').replace('%', '')) || 0;
+                        const ca = normalizePercent(a.change);
+                        const cb = normalizePercent(b.change);
+                        return cb - ca;
+                    });
+                }
+                break;
 			default:
 				break;
 		}
@@ -194,63 +217,51 @@ const Stocks = () => {
 		return filtered;
 	}, [stocks, searchQuery, selectedFilter, isHistorical, histMap]);
 
-	// 페이지네이션 계산
-	const totalPages = Math.ceil(filteredStocks.length / stocksPerPage);
-	const startIndex = (currentPage - 1) * stocksPerPage;
-	const endIndex = startIndex + stocksPerPage;
-	const currentStocks = filteredStocks.slice(startIndex, endIndex);
+    // 페이지네이션 계산 (실시간: 클라이언트, 과거: 서버에서 페이지 반환 사용)
+    const totalPages = useMemo(() => {
+        if (isHistorical) {
+            const total = Number(histMap.__total || 0);
+            return total > 0 ? Math.ceil(total / stocksPerPage) : 1;
+        }
+        return Math.ceil(filteredStocks.length / stocksPerPage);
+    }, [isHistorical, histMap.__total, filteredStocks.length, stocksPerPage]);
 
-	// 현재 페이지 심볼들의 과거 가격 로드 트리거
+    const startIndex = (currentPage - 1) * stocksPerPage;
+    const endIndex = startIndex + stocksPerPage;
+    const currentStocks = isHistorical ? (histMap.__rows || []) : filteredStocks.slice(startIndex, endIndex);
+
+    // 과거 모드: 서버 페이징 스냅샷 로드 (정렬 서버 위임)
 	useEffect(() => {
-		if (!isHistorical || !simDate) return;
-		const symbols = currentStocks.map(s => s.symbol).filter(Boolean);
-		if (symbols.length === 0) return;
-		
-		// 이미 캐시된 심볼들은 제외
-		const uncachedSymbols = symbols.filter(sym => !histMap[sym]);
-		if (uncachedSymbols.length === 0) return;
-		
-		const doFetch = async () => {
-			const base = new Date(Date.UTC(simDate.year, simDate.month - 1, simDate.day));
-			const selectedEpoch = Math.floor(base.getTime() / 1000);
-			const prevEpoch = selectedEpoch - 86400;
-			const curFrom = prevEpoch;
-			const curTo = selectedEpoch + 86400 * 7;
-			const prevFrom = prevEpoch - 86400 * 7;
-			const prevTo = prevEpoch;
-			const updates = {};
-			
-			await Promise.all(uncachedSymbols.map(async (sym) => {
-				try {
-					const [curRes, prevRes] = await Promise.all([
-						axios.get('/db/candles', { params: { ticker: sym, from: curFrom, to: curTo } }),
-						axios.get('/db/candles', { params: { ticker: sym, from: prevFrom, to: prevTo } }),
-					]);
-					const curT = curRes?.data?.t || [];
-					const curC = curRes?.data?.c || [];
-					let currentClose = null;
-					for (let i = 0; i < curT.length; i++) { if (curT[i] >= selectedEpoch) { currentClose = curC[i]; break; } }
-					const prevT = prevRes?.data?.t || [];
-					const prevC = prevRes?.data?.c || [];
-					let prevClose = null;
-					for (let i = prevT.length - 1; i >= 0; i--) { if (prevT[i] <= prevEpoch) { prevClose = prevC[i]; break; } }
-					if (typeof currentClose === 'number' && typeof prevClose === 'number') {
-						const chg = currentClose - prevClose;
-						const pct = prevClose !== 0 ? (chg / prevClose) * 100 : 0;
-						updates[sym] = { price: `$${currentClose.toFixed(2)}`, change: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}`, changePercent: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` };
-					} else {
-						updates[sym] = { price: '-', change: '-', changePercent: '-' };
-					}
-				} catch (_) {
-					updates[sym] = { price: '-', change: '-', changePercent: '-' };
-				}
-			}));
-			
-			if (Object.keys(updates).length > 0) setHistMap((prev) => ({ ...prev, ...updates }));
-		};
-		
-		doFetch();
-	}, [currentStocks, isHistorical, simDate?.year, simDate?.month, simDate?.day, histMap]);
+        if (!isHistorical || !simDate) return;
+        const doFetch = async () => {
+            try {
+                const sort = selectedFilter === '등락률' ? 'changePercent,desc' : 'name,asc';
+                const resp = await axios.get('/db/snapshot', { params: { date: dateKey, page: currentPage, size: stocksPerPage, sort } });
+                const arr = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+                const total = Number(resp?.data?.total || 0);
+                const projection = { __rows: arr, __total: total };
+                setHistMap(projection);
+            } catch (_) {
+                // 폴백: 기존 방식(부분 페치) 유지
+            }
+        };
+        doFetch();
+    }, [isHistorical, simDate?.year, simDate?.month, simDate?.day, dateKey, currentPage, selectedFilter, stocksPerPage]);
+
+	// 과거 모드: 관심종목 스냅샷 로드 (symbols 파라미터 사용)
+	useEffect(() => {
+		if (!isHistorical || !dateKey) return;
+		if (!(watchlist && watchlist.size)) { setHistFavRows([]); setHistFavError(null); setHistFavLoading(false); return; }
+		const symbolsCsv = Array.from(watchlist).join(',');
+		setHistFavLoading(true); setHistFavError(null);
+		axios.get('/db/snapshot', { params: { date: dateKey, symbols: symbolsCsv, sort: 'name,asc', page: 1, size: 1000 } })
+			.then((resp) => {
+				const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+				setHistFavRows(rows);
+			})
+			.catch(() => setHistFavError('관심종목 불러오기 실패'))
+			.finally(() => setHistFavLoading(false));
+	}, [isHistorical, dateKey, watchlist]);
 
 	// 검색어 변경 시 첫 페이지로 이동
 	useEffect(() => {
@@ -276,7 +287,7 @@ const Stocks = () => {
 				{/* 페이지 제목 */}
 				<div className="px-4 py-2">
 					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
+                                <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
 							{lastUpdate && (
 								<div className="flex items-center gap-1">
 									<Clock className="w-3 h-3" />
@@ -284,13 +295,8 @@ const Stocks = () => {
 								</div>
 							)}
 							<div className="flex items-center gap-1">
-								<span>총 {stocks.length}개 주식</span>
-								{filteredStocks.length !== stocks.length && (
-									<span>(검색 결과: {filteredStocks.length}개)</span>
-								)}
-								{filteredStocks.length > stocksPerPage && (
-									<span>(페이지 {currentPage}/{totalPages})</span>
-								)}
+                                        <span>총 {isHistorical ? (histMap.__total || 0) : stocks.length}개 주식</span>
+                                        <span>(페이지 {currentPage}/{totalPages})</span>
 							</div>
 						</div>
 					</div>
@@ -342,8 +348,8 @@ const Stocks = () => {
 
 						{/* 정렬 옵션 */}
 						<div className="px-4 py-2">
-							<div className="flex gap-2">
-								{["이름", "가격", "등락률"].map((option) => (
+                            <div className="flex gap-2">
+                                {["이름", "등락률"].map((option) => (
 									<button
 										key={option}
 										onClick={() => setSelectedFilter(option)}
@@ -407,12 +413,22 @@ const Stocks = () => {
 								</div>
 							)}
 
-							{/* 페이지네이션 */}
-							{filteredStocks.length > stocksPerPage && (
+                            {/* 페이지네이션 */}
+                            {(isHistorical ? (totalPages > 1) : (filteredStocks.length > stocksPerPage)) && (
 								<div className="mt-6 flex items-center justify-between">
-									<div className="text-sm text-gray-400">
-										{startIndex + 1}-{Math.min(endIndex, filteredStocks.length)} / {filteredStocks.length}개
-									</div>
+                                    <div className="text-sm text-gray-400">
+                                        {isHistorical
+                                            ? ((currentPage - 1) * stocksPerPage + 1)
+                                            : (startIndex + 1)
+                                        }
+                                        -
+                                        {isHistorical
+                                            ? Math.min(currentPage * stocksPerPage, Number(histMap.__total || 0))
+                                            : Math.min(endIndex, filteredStocks.length)
+                                        }
+                                        
+                                        / {isHistorical ? Number(histMap.__total || 0) : filteredStocks.length}개
+                                    </div>
 									<div className="flex items-center gap-2">
 										<button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className={`px-3 py-1 rounded-md text-sm ${currentPage === 1 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>이전</button>
 										<span className="text-sm text-gray-400">{currentPage} / {totalPages}</span>
@@ -440,9 +456,9 @@ const Stocks = () => {
 								</div>
 							</div>
 						)}
-						
+
 						<div className="space-y-2">
-							{watchlistLoading ? (
+							{(watchlistLoading || (isHistorical && histFavLoading)) ? (
 								<div className="space-y-2">
 									{[...Array(3)].map((_, index) => (
 										<div key={index} className="flex items-center justify-between p-3 bg-slate-800 rounded-xl animate-pulse">
@@ -472,8 +488,7 @@ const Stocks = () => {
 									</p>
 								</div>
 							) : (
-								stocks
-									.filter((stock) => isInWatchlist(stock.symbol))
+								(isHistorical ? histFavRows : stocks.filter((stock) => isInWatchlist(stock.symbol)))
 									.map((stock, index) => (
 										<StockCard key={index} stock={stock} index={index} showFavorite={true} />
 									))

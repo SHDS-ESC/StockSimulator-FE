@@ -17,48 +17,7 @@ import useDateStore from "@/store/useDateStore";
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [stocks, setStocks] = useState([
-    {
-      ticker: "AAPL", //response.data.stock.ticker
-      name: "애플", //response.data.stock.name
-      price: "$238.69", // 계산필요
-      change: "-0.2%", // 계산필요 (등락률)
-      changeAmount: "-$0.48", // 등락가
-      logo: "🍎", // response.data.stock.image
-    },
-    {
-      ticker: "MMM",
-      name: "3M",
-      price: "$155.30",
-      change: "-0.1%",
-      changeAmount: "-$0.16",
-      logo: "3️⃣",
-    },
-    {
-      ticker: "NFLX",
-      name: "넷플릭스",
-      price: "$1,243.82",
-      change: "+0.8%",
-      changeAmount: "+$9.87",
-      logo: "🎬",
-    },
-    {
-      ticker: "TSLA",
-      name: "테슬라",
-      price: "$245.67",
-      change: "+2.3%",
-      changeAmount: "+$5.52",
-      logo: "🚗",
-    },
-    {
-      ticker: "NVDA",
-      name: "엔비디아",
-      price: "$456.23",
-      change: "+3.2%",
-      changeAmount: "+$14.15",
-      logo: "🎮",
-    },
-  ]);
+  const [holdingStocks, setHoldingStocks] = useState([]);
   const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -79,15 +38,20 @@ const HomePage = () => {
     error: stocksError,
     lastUpdate,
     isUpdating
-  } = useRealtimeStocks();
+  } = useRealtimeStocks({ enabled: true });
 
   // 타임라인 기반 과거 모드 여부 판별 (프로필 변경/턴 변경에 반응)
   const { currentDate } = useDateStore();
   const isRealtime = useMemo(() => {
-    const name = String(selectedProfile?.name || '').trim();
-    const d = String(currentDate || selectedProfile?.processDate || '');
-    return name === '실시간' || d.startsWith('0000');
-  }, [selectedProfile?.name, currentDate, selectedProfile?.processDate]);
+    // 1) 백엔드 DTO의 timelineId가 오면 그것으로 판별 (권장)
+    if (selectedProfile?.timelineId != null) {
+      return Number(selectedProfile.timelineId) === 9;
+    }
+    // 2) 마지막 백업: 기존 로직 유지(임시 호환)
+    const name = String(selectedProfile?.name || '').toLowerCase();
+    const stateRealtime = selectedProfile?.state === true;
+    return stateRealtime || name.includes('실시간');
+  }, [selectedProfile?.timelineId, selectedProfile?.name, selectedProfile?.state]);
   const isHistorical = !isRealtime;
   const simDate = useMemo(() => {
     if (!isHistorical) return null;
@@ -95,6 +59,14 @@ const HomePage = () => {
     if (Number.isNaN(d.getTime())) return null;
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
   }, [isHistorical, currentDate, selectedProfile?.processDate]);
+  const dateKey = useMemo(() => {
+    if (!isHistorical) return null;
+    const y = String(simDate?.year || '');
+    const m = String(simDate?.month || '').padStart(2, '0');
+    const d = String(simDate?.day || '').padStart(2, '0');
+    if (!y || !m || !d) return null;
+    return `${y}-${m}-${d}`;
+  }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
 
   // 과거 모드: 해당 날짜 기준 급상승 종목 계산 (종가 vs 전일 종가)
   const [histTop, setHistTop] = useState([]);
@@ -103,12 +75,10 @@ const HomePage = () => {
   const [histCache, setHistCache] = useState({}); // 날짜별 캐시
 
   useEffect(() => {
-    if (!isHistorical) { setHistTop([]); setHistLoading(false); setHistError(null); return; }
+    if (!isHistorical || !dateKey) { setHistTop([]); setHistLoading(false); setHistError(null); return; }
 
-    // 캐시 키 생성
-    const cacheKey = `${simDate?.year}-${simDate?.month}-${simDate?.day}`;
-    if (histCache[cacheKey]) {
-      setHistTop(histCache[cacheKey]);
+    if (histCache[dateKey]) {
+      setHistTop(histCache[dateKey]);
       setHistLoading(false);
       return;
     }
@@ -116,45 +86,10 @@ const HomePage = () => {
     const run = async () => {
       setHistLoading(true); setHistError(null);
       try {
-        const base = new Date(Date.UTC(simDate.year, simDate.month - 1, simDate.day));
-        const selectedEpoch = Math.floor(base.getTime() / 1000);
-        const prevEpoch = selectedEpoch - 86400;
-        const curFrom = prevEpoch;
-        const curTo = selectedEpoch + 86400 * 7;
-        const prevFrom = prevEpoch - 86400 * 7;
-        const prevTo = prevEpoch;
-        const list = Array.isArray(stocks) ? stocks : [];
-        const symbols = list.map(s => s.symbol).filter(Boolean).slice(0, 150); // 과도한 호출 방지 제한
-        const results = await Promise.allSettled(symbols.map(async (sym) => {
-          const [curRes, prevRes] = await Promise.all([
-            axiosInstance.get('/db/candles', { params: { ticker: sym, from: curFrom, to: curTo } }),
-            axiosInstance.get('/db/candles', { params: { ticker: sym, from: prevFrom, to: prevTo } }),
-          ]);
-          const curT = curRes?.value?.data?.t || curRes?.data?.t || [];
-          const curC = curRes?.value?.data?.c || curRes?.data?.c || [];
-          let currentClose = null;
-          for (let i = 0; i < curT.length; i++) { if (curT[i] >= selectedEpoch) { currentClose = curC[i]; break; } }
-          const prevT = prevRes?.value?.data?.t || prevRes?.data?.t || [];
-          const prevC = prevRes?.value?.data?.c || prevRes?.data?.c || [];
-          let prevClose = null;
-          for (let i = prevT.length - 1; i >= 0; i--) { if (prevT[i] <= prevEpoch) { prevClose = prevC[i]; break; } }
-          if (typeof currentClose !== 'number' || typeof prevClose !== 'number') return null;
-          const chg = currentClose - prevClose;
-          const pct = prevClose !== 0 ? (chg / prevClose) * 100 : 0;
-          const meta = list.find(s => s.symbol === sym) || { name: sym };
-          return {
-            symbol: sym,
-            name: meta.name || sym,
-            price: `$${currentClose.toFixed(2)}`,
-            change: `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}`,
-            changePercent: `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`,
-          };
-        }));
-        const rows = results.map(r => (r.status === 'fulfilled' ? r.value : null)).filter(Boolean);
-        rows.sort((a, b) => parseFloat(String(b.changePercent).replace('%','')) - parseFloat(String(a.changePercent).replace('%','')));
-        const top3 = rows.slice(0, 3);
-        setHistTop(top3);
-        setHistCache(prev => ({ ...prev, [cacheKey]: top3 }));
+        const resp = await axiosInstance.get('/db/snapshot', { params: { date: dateKey, page: 1, size: 3, sort: 'changePercent,desc' } });
+        const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+        setHistTop(rows);
+        setHistCache(prev => ({ ...prev, [dateKey]: rows }));
       } catch (_) {
         setHistTop([]); setHistError('과거 데이터 계산 실패');
       } finally {
@@ -162,7 +97,7 @@ const HomePage = () => {
       }
     };
     run();
-  }, [isHistorical, simDate?.year, simDate?.month, simDate?.day, stocks, selectedProfile?.id, histCache]);
+  }, [isHistorical, dateKey, histCache]);
 
 
   useConfirmLogin(null);
@@ -173,7 +108,7 @@ const HomePage = () => {
       const stcokList = await fetchStocks();
       // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
       if (lastProfileId && Number(lastProfileId) > 0) {
-        setStocks(stcokList);
+        setHoldingStocks(stcokList);
         try {
           const response = await axiosInstance.get(
             `userprofile/profile/${lastProfileId}`,
@@ -221,8 +156,7 @@ const HomePage = () => {
         { withCredentials: true }
       );
       const stockList = response.data || [];
-
-      setStocks(stockList);
+      setHoldingStocks(stockList);
       return stockList;
     } catch (error) {
       console.error("Error fetching profiles:", error);
@@ -380,7 +314,7 @@ const HomePage = () => {
         <div className="bg-slate-800 rounded-xl p-3">
           <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
           <div className="space-y-2">
-            {stocks.map((stock, index) => (
+            {holdingStocks.map((stock, index) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
@@ -448,7 +382,7 @@ const HomePage = () => {
             </div>
           ) : (isHistorical ? histTop.length === 0 : topRisingStocks.length === 0) ? (
             <div className="text-center py-4">
-              <p className="text-gray-400 text-sm">데이터를 불러올 수 없습니다</p>
+              <p className="text-gray-400 text-sm">{isHistorical ? '데이터를 불러올 수 없습니다' : '실시간 데이터 준비중'}</p>
             </div>
           ) : (
             <div className="space-y-2">
