@@ -186,67 +186,79 @@ const Stocks = () => {
 	};
 
 	// 필터링된 주식 목록
-    const filteredStocks = useMemo(() => {
-        const base = isHistorical ? (histMap.__rows || []) : stocks;
-        const q = String(searchQuery || '').toLowerCase();
-        let filtered = base.filter((stock) => {
-            const name = String(stock?.name || '').toLowerCase();
-            const sym = String(stock?.symbol || '').toLowerCase();
-            return name.includes(q) || sym.includes(q);
-        });
+	const filteredStocks = useMemo(() => {
+		const query = String(searchQuery || '').trim().toLowerCase();
+		const base = isHistorical ? (histMap.__rows || []) : stocks;
+		let filtered = base.filter((stock) => {
+			const name = String(stock?.name || '').toLowerCase();
+			const sym = String(stock?.symbol || '').toLowerCase();
+			return query === '' ? true : (name.includes(query) || sym.includes(query));
+		});
 
-		// 정렬 적용 (표시값 기준 정렬: 과거 모드라면 histMap 값이 있으면 그 값으로)
-        switch (selectedFilter) {
-            case "이름":
-                if (!isHistorical) filtered.sort((a, b) => a.name.localeCompare(b.name));
-                break;
-            case "등락률":
-                if (!isHistorical) {
-                    filtered.sort((a, b) => {
-                        const normalizePercent = (val) => parseFloat(String(val ?? '0').replace('%', '')) || 0;
-                        const ca = normalizePercent(a.change);
-                        const cb = normalizePercent(b.change);
-                        return cb - ca;
-                    });
-                }
-                break;
+		// 정렬 적용
+		switch (selectedFilter) {
+			case "이름":
+				filtered.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+				break;
+			case "등락률": {
+				const normalizePercent = (val) => parseFloat(String(val ?? '0').replace('%', '').replace('+','')) || 0;
+				filtered.sort((a, b) => normalizePercent(b.change) - normalizePercent(a.change));
+				break;
+			}
 			default:
 				break;
 		}
 
 		return filtered;
-	}, [stocks, searchQuery, selectedFilter, isHistorical, histMap]);
+	}, [stocks, searchQuery, selectedFilter, isHistorical, histMap.__rows]);
 
-    // 페이지네이션 계산 (실시간: 클라이언트, 과거: 서버에서 페이지 반환 사용)
+    // 페이지네이션 계산 (검색 중에는 과거 모드도 클라이언트 페이지네이션)
+    const searchActive = String(searchQuery || '').trim() !== '';
     const totalPages = useMemo(() => {
         if (isHistorical) {
+            if (searchActive) {
+                return Math.max(1, Math.ceil(filteredStocks.length / stocksPerPage));
+            }
             const total = Number(histMap.__total || 0);
             return total > 0 ? Math.ceil(total / stocksPerPage) : 1;
         }
-        return Math.ceil(filteredStocks.length / stocksPerPage);
-    }, [isHistorical, histMap.__total, filteredStocks.length, stocksPerPage]);
+        return Math.max(1, Math.ceil(filteredStocks.length / stocksPerPage));
+    }, [isHistorical, searchActive, histMap.__total, filteredStocks.length, stocksPerPage]);
 
     const startIndex = (currentPage - 1) * stocksPerPage;
     const endIndex = startIndex + stocksPerPage;
-    const currentStocks = isHistorical ? (histMap.__rows || []) : filteredStocks.slice(startIndex, endIndex);
+    const currentStocks = isHistorical
+        ? (searchActive ? filteredStocks.slice(startIndex, endIndex) : (histMap.__rows || []))
+        : filteredStocks.slice(startIndex, endIndex);
 
-    // 과거 모드: 서버 페이징 스냅샷 로드 (정렬 서버 위임)
-	useEffect(() => {
+    const displayTotal = useMemo(() => {
+        if (isHistorical) {
+            return searchActive ? filteredStocks.length : Number(histMap.__total || 0);
+        }
+        return filteredStocks.length;
+    }, [isHistorical, searchActive, filteredStocks.length, histMap.__total]);
+
+    // 과거 모드: 서버 스냅샷 로드
+    // 검색 중에는 전체를 크게 받아온 다음(클라이언트 필터/페이지네이션),
+    // 검색이 없을 때는 서버 페이지네이션 사용
+    useEffect(() => {
         if (!isHistorical || !simDate) return;
         const doFetch = async () => {
             try {
                 const sort = selectedFilter === '등락률' ? 'changePercent,desc' : 'name,asc';
-                const resp = await axios.get('/db/snapshot', { params: { date: dateKey, page: currentPage, size: stocksPerPage, sort } });
+                const reqPage = searchActive ? 1 : currentPage;
+                const reqSize = searchActive ? 10000 : stocksPerPage;
+                const resp = await axios.get('/db/snapshot', { params: { date: dateKey, page: reqPage, size: reqSize, sort } });
                 const arr = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
                 const total = Number(resp?.data?.total || 0);
                 const projection = { __rows: arr, __total: total };
                 setHistMap(projection);
             } catch (_) {
-                // 폴백: 기존 방식(부분 페치) 유지
+                // 폴백: 기존 방식 유지
             }
         };
         doFetch();
-    }, [isHistorical, simDate?.year, simDate?.month, simDate?.day, dateKey, currentPage, selectedFilter, stocksPerPage]);
+    }, [isHistorical, simDate?.year, simDate?.month, simDate?.day, dateKey, currentPage, selectedFilter, stocksPerPage, searchActive]);
 
 	// 과거 모드: 관심종목 스냅샷 로드 (symbols 파라미터 사용)
 	useEffect(() => {
@@ -295,8 +307,8 @@ const Stocks = () => {
 								</div>
 							)}
 							<div className="flex items-center gap-1">
-                                        <span>총 {isHistorical ? (histMap.__total || 0) : stocks.length}개 주식</span>
-                                        <span>(페이지 {currentPage}/{totalPages})</span>
+								<span>총 {displayTotal}개 주식</span>
+								<span>(페이지 {currentPage}/{totalPages})</span>
 							</div>
 						</div>
 					</div>
@@ -414,20 +426,14 @@ const Stocks = () => {
 							)}
 
                             {/* 페이지네이션 */}
-                            {(isHistorical ? (totalPages > 1) : (filteredStocks.length > stocksPerPage)) && (
+                            {displayTotal > stocksPerPage && (
 								<div className="mt-6 flex items-center justify-between">
                                     <div className="text-sm text-gray-400">
-                                        {isHistorical
-                                            ? ((currentPage - 1) * stocksPerPage + 1)
-                                            : (startIndex + 1)
-                                        }
+													{(startIndex + 1)}
                                         -
-                                        {isHistorical
-                                            ? Math.min(currentPage * stocksPerPage, Number(histMap.__total || 0))
-                                            : Math.min(endIndex, filteredStocks.length)
-                                        }
+													{Math.min(endIndex, displayTotal)}
                                         
-                                        / {isHistorical ? Number(histMap.__total || 0) : filteredStocks.length}개
+													/ {displayTotal}개
                                     </div>
 									<div className="flex items-center gap-2">
 										<button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className={`px-3 py-1 rounded-md text-sm ${currentPage === 1 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-slate-700 text-white hover:bg-slate-600'}`}>이전</button>
