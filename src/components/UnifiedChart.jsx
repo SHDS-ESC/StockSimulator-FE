@@ -155,22 +155,22 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
   };
 
   const normalizeCandles = (payload) => {
-    const { s, t, d, o, h, l, c, v } = payload || {};
-    if (s !== 'ok' || !Array.isArray(o)) return [];
-    return o.map((_, i) => {
-      const day = d?.[i];
-      let time = Number(t?.[i]);
+    const { status, timestamps, dates, opens, highs, lows, closes, volumes } = payload || {};
+    if (status !== 'ok' || !Array.isArray(opens)) return [];
+    return opens.map((_, i) => {
+      const day = dates?.[i];
+      let time = Number(timestamps?.[i]);
       if (day) {
         const [yy, mm, dd] = String(day).split('-').map(Number);
         if ([yy, mm, dd].every(Number.isFinite)) time = { year: yy, month: mm, day: dd };
       }
       return {
         time,
-        open:  Number(o[i]),
-        high:  Number(h[i]),
-        low:   Number(l[i]),
-        close: Number(c[i]),
-        volume: Number(v?.[i] ?? 0),
+        open:  Number(opens[i]),
+        high:  Number(highs[i]),
+        low:   Number(lows[i]),
+        close: Number(closes[i]),
+        volume: Number(volumes?.[i] ?? 0),
       };
     }).filter(v => v.time && [v.open, v.high, v.low, v.close].every(Number.isFinite));
   };
