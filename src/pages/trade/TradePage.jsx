@@ -87,17 +87,17 @@ export default function TradePage() {
           axios.get('/db/candles', { params: { ticker: symbol, from: prevFrom, to: prevTo } }),
         ]);
 
-        const curT = curRes?.data?.t || [];
-        const curO = curRes?.data?.o || [];
-        const curD = curRes?.data?.d || [];
+        const curT = curRes?.data?.timestamps || [];
+        const curO = curRes?.data?.opens || [];
+        const curD = curRes?.data?.dates || [];
         // 선택일 당일 또는 이후 첫 거래일 찾기
         let currentOpen = null;
         for (let i = 0; i < curT.length; i++) {
           if (curT[i] >= selectedEpoch) { currentOpen = curO[i]; break; }
         }
 
-        const prevT = prevRes?.data?.t || [];
-        const prevC = prevRes?.data?.c || [];
+        const prevT = prevRes?.data?.timestamps || [];
+        const prevC = prevRes?.data?.closes || [];
         // 전일 이전 구간에서 마지막 거래일 종가
         let prevClose = null;
         for (let i = prevT.length - 1; i >= 0; i--) {
