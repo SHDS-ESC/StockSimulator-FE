@@ -15,11 +15,12 @@ import {
 } from "lucide-react";
 import useDateStore from "@/store/useDateStore";
 import { Button } from "../ui/button";
-
+import axiosInstance from "@/util/axiosInstance";
+import useLoginStore from "@/store/useLoginStore";
 // Header 컴포넌트
 export const Header = () => {
-  const { currentDate, initToday, goNextTurn, setCurrentDate } =
-    useDateStore();
+  const { currentDate, goNextTurn } = useDateStore();
+  const { lastProfileId } = useLoginStore();
   console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -33,16 +34,33 @@ export const Header = () => {
     setIsMenuOpen(false);
   };
 
-  const handleNextButtonClick = () => {
-    goNextTurn()
-  }
+  const handleNextButtonClick = async () => {
+    const currentDateObj = new Date(currentDate);
+    currentDateObj.setDate(currentDateObj.getDate() + 1);
+    const updateDate = goNextTurn(currentDateObj);
+    try {
+      await axiosInstance.post(
+        "/userprofile/update/process-date",
+        {
+          userProfileId: lastProfileId,
+          processDate: updateDate,
+        },
+        { withCredentials: true }
+      );
+    } catch (e) {
+      console.log(e);
+      /* ignore */
+    } finally {
+      console.log("업데이트 날짜" + updateDate);
+    }
+  };
 
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-     <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
-  {/* 왼쪽 */}
-  <div className="flex justify-start">
-      <button
+      <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
+        {/* 왼쪽 */}
+        <div className="flex justify-start">
+          <button
             onClick={toggleMenu}
             className="w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"
           >
@@ -52,20 +70,24 @@ export const Header = () => {
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
-  </div>
+        </div>
 
-  {/* 가운데 - 자동으로 완전 중앙 */}
-  <h1 className="text-white text-lg font-bold text-center">
-    {currentDate}
-  </h1>
+        {/* 가운데 - 자동으로 완전 중앙 */}
+        <h1 className="text-white text-lg font-bold text-center">
+          {currentDate}
+        </h1>
 
-  {/* 오른쪽 */}
-  <div className="flex justify-end">
-    <Button onClick={handleNextButtonClick} className="m-0" variant="confirm">
-      턴 종료
-    </Button>
-  </div>
-</div>
+        {/* 오른쪽 */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleNextButtonClick}
+            className="m-0"
+            variant="confirm"
+          >
+            턴 종료
+          </Button>
+        </div>
+      </div>
 
       {/* 드롭다운 메뉴 */}
       {isMenuOpen && (

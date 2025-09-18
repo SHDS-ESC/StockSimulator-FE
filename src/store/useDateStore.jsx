@@ -6,6 +6,7 @@ const useDateStore = create(
     (set, get) => ({
       // 초기 상태
       currentDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD 형식
+      isTurnOver: false,
 
       // 오늘 날짜로 초기화
       initToday: (currentDate) =>
@@ -14,15 +15,17 @@ const useDateStore = create(
         }),
 
       // 다음 턴으로 이동
-      goNextTurn: () =>
-        set((state) => {
-          const currentDateObj = new Date(state.currentDate);
-            currentDateObj.setDate(currentDateObj.getDate() + 1);
-            return {
-              currentDate: currentDateObj.toISOString().split("T")[0],
-              isPrev: true, // 다음 날짜의 첫 번째 턴
-            }
-        }),
+      goNextTurn: (currentDateObj) => {
+        const newDate = currentDateObj.toISOString().split("T")[0];
+        set(() => {
+          console.log(currentDateObj);
+          return {
+            currentDate: newDate,
+            isTurnOver: true,
+          };
+        });
+        return newDate;
+      },
 
       // 날짜 직접 설정
       setCurrentDate: (date) => {
