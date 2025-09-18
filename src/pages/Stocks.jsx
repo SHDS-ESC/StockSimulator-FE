@@ -30,6 +30,11 @@ const Stocks = () => {
 	}, [profile?.timelineId]);
 
 	const isHistorical = !isRealtime;
+	useEffect(() => {
+		if (isRealtime) {
+			setSelectedFilter("등락률");
+		}
+	}, [isRealtime]);
 	const timelineFrom = profile?.timelineFrom || null;
 	const simDate = useMemo(() => {
 		if (!isHistorical) return null;
@@ -202,7 +207,7 @@ const Stocks = () => {
 				break;
 			case "등락률": {
 				const normalizePercent = (val) => parseFloat(String(val ?? '0').replace('%', '').replace('+','')) || 0;
-				filtered.sort((a, b) => normalizePercent(b.change) - normalizePercent(a.change));
+				filtered.sort((a, b) => normalizePercent(b.changePercent) - normalizePercent(a.changePercent));
 				break;
 			}
 			default:
