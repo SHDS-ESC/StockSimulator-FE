@@ -16,6 +16,48 @@ import useDateStore from "@/store/useDateStore";
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const [stocks, setStocks] = useState([
+    {
+      ticker: "AAPL", //response.data.stock.ticker
+      name: "애플", //response.data.stock.name
+      price: "$238.69", // 계산필요
+      change: "-0.2%", // 계산필요 (등락률)
+      changeAmount: "-$0.48", // 등락가
+      logo: "🍎", // response.data.stock.image
+    },
+    {
+      ticker: "MMM",
+      name: "3M",
+      price: "$155.30",
+      change: "-0.1%",
+      changeAmount: "-$0.16",
+      logo: "3️⃣",
+    },
+    {
+      ticker: "NFLX",
+      name: "넷플릭스",
+      price: "$1,243.82",
+      change: "+0.8%",
+      changeAmount: "+$9.87",
+      logo: "🎬",
+    },
+    {
+      ticker: "TSLA",
+      name: "테슬라",
+      price: "$245.67",
+      change: "+2.3%",
+      changeAmount: "+$5.52",
+      logo: "🚗",
+    },
+    {
+      ticker: "NVDA",
+      name: "엔비디아",
+      price: "$456.23",
+      change: "+3.2%",
+      changeAmount: "+$14.15",
+      logo: "🎮",
+    },
+  ]);
   const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
@@ -34,8 +76,10 @@ const HomePage = () => {
   const loadProfile = async () => {
     try {
       const list = await fetchProfiles();
+      const stcokList = await fetchStocks();
       // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
       if (lastProfileId && Number(lastProfileId) > 0) {
+        setStocks(stcokList);
         try {
           const response = await axiosInstance.get(
             `userprofile/profile/${lastProfileId}`,
@@ -43,7 +87,7 @@ const HomePage = () => {
           );
           setSelectedProfile(response.data);
           localStorage.setItem("newProfile", JSON.stringify(response.data));
-          setCurrentDate(response.data.processDate)
+          setCurrentDate(response.data.processDate);
         } catch (e) {
           console.error("Error fetching active profile:", e);
           if (Array.isArray(list) && list.length > 0)
@@ -73,10 +117,32 @@ const HomePage = () => {
       return [];
     }
   };
-  useEffect(() => {
-    if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
-    loadProfile();
-  }, [email, lastProfileId]);
+
+  // 보유 주식 리스트 불러오기
+  const fetchStocks = async () => {
+    if (!email || String(email).trim() === "") return [];
+    try {
+      const response = await axiosInstance.get(
+        `holdings/stocks/${lastProfileId}`,
+        { withCredentials: true }
+      );
+      const stockList = response.data || [];
+
+      setStocks(stockList);
+      return stockList;
+    } catch (error) {
+      console.error("Error fetching profiles:", error);
+      return [];
+    }
+  };
+
+  useEffect(
+    () => {
+      if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
+      loadProfile();
+    },
+    [email, lastProfileId]
+  );
 
   // 프로필 선택
   const handleProfileSelect = (profile) => {
@@ -94,55 +160,11 @@ const HomePage = () => {
       });
   };
 
-  const stocks = [
-    {
-      symbol: "AAPL",
-      name: "애플",
-      price: "$238.69",
-      change: "-0.2%",
-      changeAmount: "-$0.48",
-      logo: "🍎",
-    },
-    {
-      symbol: "MMM",
-      name: "3M",
-      price: "$155.30",
-      change: "-0.1%",
-      changeAmount: "-$0.16",
-      logo: "3️⃣",
-    },
-    {
-      symbol: "NFLX",
-      name: "넷플릭스",
-      price: "$1,243.82",
-      change: "+0.8%",
-      changeAmount: "+$9.87",
-      logo: "🎬",
-    },
-    {
-      symbol: "TSLA",
-      name: "테슬라",
-      price: "$245.67",
-      change: "+2.3%",
-      changeAmount: "+$5.52",
-      logo: "🚗",
-    },
-    {
-      symbol: "NVDA",
-      name: "엔비디아",
-      price: "$456.23",
-      change: "+3.2%",
-      changeAmount: "+$14.15",
-      logo: "🎮",
-    },
-  ];
-
   const handleCreateProfile = () => {
     // Character 페이지로 이동
     navigate("/character");
   };
 
-  const handleGoLogin = () => navigate("/login");
   const handleLogout = async () => {
     try {
       await axiosInstance.post("/user/logout");
@@ -241,34 +263,32 @@ const HomePage = () => {
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    {/* 이미지 */}
                     <img
-                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      src={stock.logo}
                       alt={stock.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
                     />
+                    {/* */}
                     <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.symbol}
+                      {stock.ticker}
                     </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
                       {stock.name}
                     </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                    <p className="text-gray-400 text-xs">{stock.ticker}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-white font-semibold text-sm">
-                    {stock.price}
+                    $ {stock.price}
                   </p>
                   <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
+                    className={`text-xs ${stock.change > 0 ? "text-red-500" : "text-blue-400"}`}
                   >
-                    {stock.change}
+                    $ {stock.change}%
                   </p>
                 </div>
               </div>
@@ -292,33 +312,29 @@ const HomePage = () => {
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
                     <img
-                      src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                      src={stock.logo}
                       alt={stock.name}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.nextSibling.style.display = "flex";
-                      }}
                     />
                     <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.symbol}
+                      {stock.ticker}
                     </span>
                   </div>
                   <div>
                     <h4 className="text-white font-medium text-sm">
                       {stock.name}
                     </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                    <p className="text-gray-400 text-xs">{stock.ticker}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-white font-semibold text-sm">
-                    {stock.price}
+                    $ {stock.price}
                   </p>
                   <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
+                    className={`text-xs ${stock.change > 0 ? "text-red-500" : "text-blue-400"}`}
                   >
-                    {stock.change}
+                   $ {stock.change}%
                   </p>
                 </div>
               </div>
