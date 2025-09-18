@@ -14,7 +14,6 @@ import TradePage from "./pages/trade/TradePage";
 import StockLive from "./pages/trade/StockLive";
 import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
-import Example from "./pages/Example";
 
 function App() {
   return (

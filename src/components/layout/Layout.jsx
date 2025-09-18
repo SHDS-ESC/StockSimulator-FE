@@ -18,8 +18,7 @@ import { Button } from "../ui/button";
 
 // Header 컴포넌트
 export const Header = () => {
-  const { currentDate, initToday, goNextTurn, setCurrentDate } =
-    useDateStore();
+  const { currentDate, initToday, goNextTurn, setCurrentDate } = useDateStore();
   console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -34,15 +33,15 @@ export const Header = () => {
   };
 
   const handleNextButtonClick = () => {
-    goNextTurn()
-  }
+    goNextTurn();
+  };
 
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-     <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
-  {/* 왼쪽 */}
-  <div className="flex justify-start">
-      <button
+      <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
+        {/* 왼쪽 */}
+        <div className="flex justify-start">
+          <button
             onClick={toggleMenu}
             className="w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"
           >
@@ -52,20 +51,30 @@ export const Header = () => {
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
-  </div>
+        </div>
 
-  {/* 가운데 - 자동으로 완전 중앙 */}
-  <h1 className="text-white text-lg font-bold text-center">
-    {currentDate}
-  </h1>
+        {/* 가운데 - 자동으로 완전 중앙 */}
+        <h1
+          className="text-white text-lg text-center"
+          style={{
+            fontFamily: '"IBM Plex Sans KR", sans-serif',
+            fontWeight: "normal",
+          }}
+        >
+          {currentDate}
+        </h1>
 
-  {/* 오른쪽 */}
-  <div className="flex justify-end">
-    <Button onClick={handleNextButtonClick} className="m-0" variant="confirm">
-      턴 종료
-    </Button>
-  </div>
-</div>
+        {/* 오른쪽 */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleNextButtonClick}
+            className="m-0"
+            variant="confirm"
+          >
+            턴 종료
+          </Button>
+        </div>
+      </div>
 
       {/* 드롭다운 메뉴 */}
       {isMenuOpen && (

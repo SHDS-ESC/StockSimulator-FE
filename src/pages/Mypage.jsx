@@ -142,16 +142,12 @@ const MyPage = () => {
       );
       const list = response.data || [];
       setProfiles(list);
-      // currentProfileIndex가 유효한 범위에 있는지 확인
-      if (currentProfileIndex >= list.length && list.length > 0) {
-        setCurrentProfileIndex(0);
-      }
       return list;
     } catch (error) {
       console.error("Error fetching profiles:", error);
       return [];
     }
-  }, [email, currentProfileIndex]);
+  }, [email]);
 
   // 초기 프로필 로드
   const loadProfile = useCallback(async () => {
@@ -231,13 +227,18 @@ const MyPage = () => {
       });
   };
 
-  // 다음 프로필로 이동
+  // 다음 프로필로 이동 (조회용)
   const handleNextProfile = () => {
     if (profiles.length > 0) {
       const newIndex =
         currentProfileIndex < profiles.length - 1 ? currentProfileIndex + 1 : 0;
       setCurrentProfileIndex(newIndex);
-      handleProfileSelect(profiles[newIndex]);
+
+      // 선택된 프로필의 정보를 업데이트 (실행 중인 프로필은 변경하지 않음)
+      const selectedProfile = profiles[newIndex];
+      if (selectedProfile) {
+        setSelectedProfile(selectedProfile);
+      }
     }
   };
 
@@ -375,7 +376,7 @@ const MyPage = () => {
               >
                 <ChevronRight className="w-4 h-4 text-white" />
               </button>
-              {/* <button
+              <button
                 onClick={() => setShowBalance(!showBalance)}
                 className="p-1 text-gray-400 hover:text-white"
               >
@@ -384,7 +385,7 @@ const MyPage = () => {
                 ) : (
                   <EyeOff className="w-4 h-4" />
                 )}
-              </button> */}
+              </button>
             </div>
           </div>
 
