@@ -1,0 +1,367 @@
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  TrendingUp,
+  TrendingDown,
+  BarChart3,
+  Brain,
+  Target,
+  Award,
+  AlertTriangle,
+} from "lucide-react";
+import useLoginStore from "@/store/useLoginStore";
+import axiosInstance from "@/util/axiosInstance";
+
+const Chat = () => {
+  const [activeTab, setActiveTab] = useState("analysis");
+  const { email, lastProfileId } = useLoginStore();
+
+  return (
+    <div className="min-h-screen bg-slate-950 pb-20">
+      {/* 모바일 헤더 */}
+      <div className="bg-slate-900 sticky top-0 z-50 border-b border-slate-700">
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                💬
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-white">AI 투자 분석</h1>
+                <p className="text-xs text-gray-400">스마트한 투자 인사이트</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-4 space-y-4">
+        {/* 탭 네비게이션 - 모바일 최적화 */}
+        <div className="bg-slate-800 rounded-2xl shadow-sm overflow-hidden">
+          <div className="flex overflow-x-auto">
+            {[
+              { id: "analysis", name: "분석", icon: BarChart3 },
+              { id: "strategy", name: "전략", icon: Brain },
+              { id: "simulation", name: "시뮬레이션", icon: Target },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 py-3 px-2 text-center border-b-2 transition-colors min-w-[80px] ${
+                    activeTab === tab.id
+                      ? "border-blue-500 text-blue-400 bg-blue-500 bg-opacity-10"
+                      : "border-transparent text-gray-400"
+                  }`}
+                >
+                  <Icon className="w-4 h-4 mx-auto mb-1" />
+                  <div className="text-xs font-medium">{tab.name}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* 탭 컨텐츠 */}
+          <div className="p-4">
+            {activeTab === "analysis" && (
+              <div className="space-y-4">
+                {/* 기간별 수익률 */}
+                <div className="bg-slate-700 rounded-xl p-4">
+                  <h3 className="font-medium text-white mb-3 text-sm">
+                    📈 기간별 수익률
+                  </h3>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <div className="text-lg font-bold text-red-400">
+                        +8.5%
+                      </div>
+                      <div className="text-xs text-gray-400">1개월</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-red-400">
+                        +12.3%
+                      </div>
+                      <div className="text-xs text-gray-400">3개월</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-red-400">
+                        +18.7%
+                      </div>
+                      <div className="text-xs text-gray-400">6개월</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-red-400">
+                        +24.1%
+                      </div>
+                      <div className="text-xs text-gray-400">1년</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 리스크 지표 */}
+                <div className="bg-slate-700 rounded-xl p-4">
+                  <h3 className="font-medium text-white mb-3 text-sm">
+                    ⚠️ 리스크 지표
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-300">변동성</span>
+                        <span className="font-medium text-white">18.5%</span>
+                      </div>
+                      <div className="w-full bg-slate-600 rounded-full h-2">
+                        <div
+                          className="bg-yellow-500 h-2 rounded-full"
+                          style={{ width: "18.5%" }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-300">최대낙폭(MDD)</span>
+                        <span className="font-medium text-red-400">-12.3%</span>
+                      </div>
+                      <div className="w-full bg-slate-600 rounded-full h-2">
+                        <div
+                          className="bg-red-500 h-2 rounded-full"
+                          style={{ width: "12.3%" }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-300">샤프지수</span>
+                      <span className="font-medium text-green-400">
+                        1.85 (우수)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI 예측 */}
+                <div className="bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl p-4 border border-purple-500 border-opacity-30">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Brain className="w-4 h-4 text-purple-400" />
+                    <h3 className="font-medium text-white text-sm">
+                      🤖 AI 예측
+                    </h3>
+                  </div>
+                  <div className="text-center mb-3">
+                    <div className="text-xl font-bold text-purple-400">
+                      +6.8% ~ +9.2%
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      다음 달 예상 수익률
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-300 space-y-1">
+                    <div>• 기술주 섹터 강세 지속 전망</div>
+                    <div>• NVDA 실적 발표 임박 (호재 예상)</div>
+                    <div>• 시장 변동성 증가 예상</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "strategy" && (
+              <div className="space-y-4">
+                {/* 투자 성향 */}
+                <div className="bg-blue-500 bg-opacity-10 rounded-xl p-4 border border-blue-500 border-opacity-30">
+                  <h3 className="font-medium text-white mb-3 text-sm">
+                    🎯 나의 투자 성향
+                  </h3>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-lg font-bold text-blue-400">
+                        단기매매
+                      </div>
+                      <div className="text-xs text-gray-400">70% 비중</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-green-400">
+                        성장주
+                      </div>
+                      <div className="text-xs text-gray-400">선호 스타일</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-purple-400">
+                        공격적
+                      </div>
+                      <div className="text-xs text-gray-400">투자 성향</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 추천 전략 Top 3 */}
+                <div>
+                  <h3 className="font-medium text-white mb-3 text-sm">
+                    💡 추천 전략 TOP 3
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="bg-slate-700 border-2 border-green-500 border-opacity-50 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Award className="w-4 h-4 text-green-400" />
+                          <span className="font-medium text-green-300 text-sm">
+                            1위: 모멘텀 전략
+                          </span>
+                        </div>
+                        <span className="text-xs bg-green-500 bg-opacity-20 text-green-300 px-2 py-1 rounded-full">
+                          92%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-300 mb-2">
+                        상승 추세 종목 집중 투자
+                      </p>
+                      <div className="text-xs text-gray-400">
+                        예상 수익률: +15~20% | 위험도: 높음
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-700 border border-slate-600 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <TrendingUp className="w-4 h-4 text-blue-400" />
+                          <span className="font-medium text-white text-sm">
+                            2위: 섹터 로테이션
+                          </span>
+                        </div>
+                        <span className="text-xs bg-blue-500 bg-opacity-20 text-blue-300 px-2 py-1 rounded-full">
+                          78%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-300 mb-2">
+                        강세 섹터 간 자금 이동
+                      </p>
+                      <div className="text-xs text-gray-400">
+                        예상 수익률: +10~15% | 위험도: 중간
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-700 border border-slate-600 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          <BarChart3 className="w-4 h-4 text-purple-400" />
+                          <span className="font-medium text-white text-sm">
+                            3위: 기술적 분석
+                          </span>
+                        </div>
+                        <span className="text-xs bg-purple-500 bg-opacity-20 text-purple-300 px-2 py-1 rounded-full">
+                          65%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-300 mb-2">
+                        RSI, MACD 기반 매매
+                      </p>
+                      <div className="text-xs text-gray-400">
+                        예상 수익률: +8~12% | 위험도: 중간
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "simulation" && (
+              <div className="space-y-4">
+                {/* 시뮬레이션 */}
+                <div className="bg-green-500 bg-opacity-10 rounded-xl p-4 border border-green-500 border-opacity-30">
+                  <h3 className="font-medium text-white mb-3 text-sm">
+                    🎮 가상 시나리오
+                  </h3>
+                  <div className="space-y-3">
+                    <select className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white">
+                      <option>AAPL - 애플</option>
+                      <option>MSFT - 마이크로소프트</option>
+                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        placeholder="투자금액"
+                        className="px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-gray-400"
+                      />
+                      <select className="px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white">
+                        <option>1개월</option>
+                        <option>3개월</option>
+                        <option>6개월</option>
+                      </select>
+                    </div>
+                    <button className="w-full bg-green-600 text-white py-2 px-4 rounded-lg font-medium text-sm hover:bg-green-700">
+                      시뮬레이션 실행
+                    </button>
+                  </div>
+                  <div className="mt-4 bg-slate-700 rounded-lg p-3">
+                    <div className="text-xs text-gray-400 mb-2">예상 결과</div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-white">예상 수익</span>
+                      <span className="font-bold text-green-400">
+                        +₩2,670K (+8.5%)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 리밸런싱 추천 */}
+                <div>
+                  <h3 className="font-medium text-white mb-3 text-sm">
+                    ⚖️ 리밸런싱 추천
+                  </h3>
+                  <div className="bg-yellow-500 bg-opacity-10 border border-yellow-500 border-opacity-30 rounded-xl p-4 mb-3">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                      <span className="font-medium text-yellow-300 text-sm">
+                        포트폴리오 조정 필요
+                      </span>
+                    </div>
+                    <p className="text-xs text-yellow-200">
+                      기술주 비중 65% 과도 집중
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-700 rounded-xl border border-slate-600 p-4">
+                    <h4 className="font-medium text-white mb-3 text-sm">
+                      권장 액션
+                    </h4>
+                    <div className="space-y-2 text-xs text-gray-300">
+                      <div>• AAPL 일부 매도 (20%) → 헬스케어 ETF</div>
+                      <div>• JPM, BAC 금융주 추가 매수</div>
+                      <div className="text-blue-400">
+                        • 예상 효과: 리스크 15% 감소
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* AI 인사이트 */}
+        <div className="bg-slate-800 rounded-2xl p-4 shadow-sm">
+          <h3 className="font-semibold text-white mb-3 text-sm">
+            💡 AI 투자 인사이트
+          </h3>
+          <div className="space-y-3">
+            <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
+              <h4 className="font-medium text-purple-300 mb-1 text-sm">
+                이번 주 추천
+              </h4>
+              <p className="text-xs text-purple-200">
+                기술주 비중 조정, 헬스케어 분산투자 고려
+              </p>
+            </div>
+            <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
+              <h4 className="font-medium text-green-300 mb-1 text-sm">
+                성과 분석
+              </h4>
+              <p className="text-xs text-green-200">
+                최근 30일 단타 성과 우수, 현재 전략 유지 권장
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Chat;
