@@ -55,14 +55,14 @@ export default function StockLive() {
 					axios.get('/db/candles', { params: { ticker: s, from: curFrom, to: curTo } }),
 					axios.get('/db/candles', { params: { ticker: s, from: prevFrom, to: prevTo } }),
 				]);
-				const curT = curRes?.data?.t || [];
-				const curO = curRes?.data?.o || [];
+                const curT = curRes?.data?.timestamps || [];
+                const curO = curRes?.data?.opens || [];
 				let currentOpen = null;
 				for (let i = 0; i < curT.length; i++) {
 					if (curT[i] >= selectedEpoch) { currentOpen = curO[i]; break; }
 				}
-				const prevT = prevRes?.data?.t || [];
-				const prevC = prevRes?.data?.c || [];
+                const prevT = prevRes?.data?.timestamps || [];
+                const prevC = prevRes?.data?.closes || [];
 				let prevCloseVal = null;
 				for (let i = prevT.length - 1; i >= 0; i--) {
 					if (prevT[i] <= prevEpoch) { prevCloseVal = prevC[i]; break; }
