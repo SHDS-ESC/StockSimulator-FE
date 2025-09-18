@@ -17,11 +17,11 @@ import Chat from "./pages/Chat";
 
 function App() {
   return (
-    <div className="min-h-screen flex flex-col items-center font-['Jua'] relative">
+    <div className="min-h-screen flex flex-col items-center relative">
       <AnimatedBackground />
       <Header />
       <div className="bg-slate-950 w-full max-w-md flex-1 flex flex-col relative z-20">
-        <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative">
+        <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative pt-16 pb-20">
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/trade" element={<TradePage />} />
