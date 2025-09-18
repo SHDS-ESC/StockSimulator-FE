@@ -5,12 +5,8 @@ import {
   BarChart3,
   Brain,
   Target,
-  History,
   Award,
   AlertTriangle,
-  ChevronRight,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
 } from "lucide-react";
 import useLoginStore from "@/store/useLoginStore";
 import axiosInstance from "@/util/axiosInstance";
@@ -18,52 +14,6 @@ import axiosInstance from "@/util/axiosInstance";
 const Chat = () => {
   const [activeTab, setActiveTab] = useState("analysis");
   const { email, lastProfileId } = useLoginStore();
-
-  // 모의투자 이력 데이터 (실제로는 API에서 가져올 데이터)
-  const [investmentHistory] = useState([
-    {
-      id: 1,
-      date: "2024-01-15",
-      stock: "AAPL",
-      stockName: "애플",
-      action: "매수",
-      quantity: 10,
-      price: 185.5,
-      totalAmount: 1855.0,
-      currentPrice: 195.3,
-      profit: 98.0,
-      profitRate: 5.28,
-      status: "보유중",
-    },
-    {
-      id: 2,
-      date: "2024-01-10",
-      stock: "TSLA",
-      stockName: "테슬라",
-      action: "매도",
-      quantity: 5,
-      price: 220.0,
-      totalAmount: 1100.0,
-      sellPrice: 245.67,
-      profit: 128.35,
-      profitRate: 11.67,
-      status: "완료",
-    },
-    {
-      id: 3,
-      date: "2024-01-08",
-      stock: "NVDA",
-      stockName: "엔비디아",
-      action: "매수",
-      quantity: 8,
-      price: 420.0,
-      totalAmount: 3360.0,
-      currentPrice: 485.2,
-      profit: 521.6,
-      profitRate: 15.52,
-      status: "보유중",
-    },
-  ]);
 
   return (
     <div className="min-h-screen bg-slate-950 pb-20">
@@ -92,7 +42,6 @@ const Chat = () => {
               { id: "analysis", name: "분석", icon: BarChart3 },
               { id: "strategy", name: "전략", icon: Brain },
               { id: "simulation", name: "시뮬레이션", icon: Target },
-              { id: "history", name: "모의투자 이력", icon: History },
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -383,180 +332,6 @@ const Chat = () => {
                 </div>
               </div>
             )}
-
-            {activeTab === "history" && (
-              <div className="space-y-4">
-                {/* 모의투자 이력 헤더 */}
-                <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
-                  <h3 className="font-medium text-white mb-3 text-sm flex items-center gap-2">
-                    <History className="w-4 h-4" />
-                    📊 모의투자 이력
-                  </h3>
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div>
-                      <div className="text-lg font-bold text-green-400">
-                        {investmentHistory.filter((h) => h.profit > 0).length}
-                      </div>
-                      <div className="text-xs text-gray-400">수익 거래</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-red-400">
-                        {investmentHistory.filter((h) => h.profit < 0).length}
-                      </div>
-                      <div className="text-xs text-gray-400">손실 거래</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-white">
-                        {
-                          investmentHistory.filter((h) => h.status === "보유중")
-                            .length
-                        }
-                      </div>
-                      <div className="text-xs text-gray-400">보유중</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 거래 이력 목록 */}
-                <div>
-                  <h3 className="font-medium text-white mb-3 text-sm">
-                    최근 거래 내역
-                  </h3>
-                  <div className="space-y-3">
-                    {investmentHistory.map((trade) => (
-                      <div
-                        key={trade.id}
-                        className="bg-slate-700 rounded-xl p-4 border border-slate-600"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center overflow-hidden">
-                              <img
-                                src={`https://financialmodelingprep.com/image-stock/${trade.stock}.png`}
-                                alt={trade.stockName}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.target.style.display = "none";
-                                  e.target.nextSibling.style.display = "flex";
-                                }}
-                              />
-                              <span className="text-white font-bold text-sm hidden">
-                                {trade.stock}
-                              </span>
-                            </div>
-                            <div>
-                              <h4 className="text-white font-semibold text-sm">
-                                {trade.stockName}
-                              </h4>
-                              <p className="text-gray-400 text-xs">
-                                {trade.date} • {trade.action}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div
-                              className={`font-bold text-sm flex items-center gap-1 ${
-                                trade.profit >= 0
-                                  ? "text-green-400"
-                                  : "text-red-400"
-                              }`}
-                            >
-                              {trade.profit >= 0 ? (
-                                <TrendingUpIcon className="w-3 h-3" />
-                              ) : (
-                                <TrendingDownIcon className="w-3 h-3" />
-                              )}
-                              {trade.profit >= 0 ? "+" : ""}$
-                              {Math.abs(trade.profit).toFixed(0)}
-                            </div>
-                            <div
-                              className={`text-xs ${
-                                trade.profit >= 0
-                                  ? "text-green-300"
-                                  : "text-red-300"
-                              }`}
-                            >
-                              {trade.profit >= 0 ? "+" : ""}
-                              {trade.profitRate.toFixed(1)}%
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-3 gap-3 text-xs">
-                          <div>
-                            <div className="text-gray-400 mb-1">수량</div>
-                            <div className="text-white font-medium">
-                              {trade.quantity}주
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-gray-400 mb-1">
-                              {trade.action === "매수" ? "매수가" : "매도가"}
-                            </div>
-                            <div className="text-white font-medium">
-                              ${trade.price.toFixed(2)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-gray-400 mb-1">상태</div>
-                            <div
-                              className={`font-medium ${
-                                trade.status === "보유중"
-                                  ? "text-blue-400"
-                                  : "text-gray-300"
-                              }`}
-                            >
-                              {trade.status}
-                            </div>
-                          </div>
-                        </div>
-
-                        {trade.status === "보유중" && (
-                          <div className="mt-3 pt-3 border-t border-slate-600">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-gray-400">현재가</span>
-                              <span className="text-white font-medium">
-                                ${trade.currentPrice.toFixed(2)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 통계 요약 */}
-                <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
-                  <h3 className="font-medium text-white mb-3 text-sm">
-                    📈 투자 성과 요약
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-400 mb-1">총 수익</div>
-                      <div className="text-lg font-bold text-green-400">
-                        +$
-                        {investmentHistory
-                          .reduce((sum, trade) => sum + trade.profit, 0)
-                          .toFixed(0)}
-                      </div>
-                    </div>
-                    <div className="bg-slate-800 rounded-lg p-3">
-                      <div className="text-xs text-gray-400 mb-1">승률</div>
-                      <div className="text-lg font-bold text-white">
-                        {(
-                          (investmentHistory.filter((h) => h.profit > 0)
-                            .length /
-                            investmentHistory.length) *
-                          100
-                        ).toFixed(0)}
-                        %
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -590,4 +365,3 @@ const Chat = () => {
 };
 
 export default Chat;
-
