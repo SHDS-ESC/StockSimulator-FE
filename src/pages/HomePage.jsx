@@ -228,6 +228,10 @@ const HomePage = () => {
     }
     clear();
     sessionStorage.removeItem("accessToken");
+    sessionStorage.removeItem("login-store");
+    sessionStorage.removeItem("timeLineList");
+    localStorage.removeItem("newProfile");
+    localStorage.removeItem("date-storage");
     navigate("/");
   };
 
@@ -481,7 +485,7 @@ const HomePage = () => {
 
             {/* 프로필 목록 */}
             <div
-              className="px-6 py-4 space-y-3 overflow-y-auto"
+              className="px-6 py-4 space-y-3 overflow-y-auto scrollbar-hide"
               style={{ maxHeight: "400px" }}
             >
               {profiles.map((profile) => (
@@ -510,7 +514,7 @@ const HomePage = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">서브타이틀</p>
+                      <p className="text-gray-400 text-sm mt-1">{profile.name}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
