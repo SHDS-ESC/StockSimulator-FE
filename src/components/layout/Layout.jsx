@@ -73,7 +73,13 @@ export const Header = () => {
         </div>
 
         {/* 가운데 - 자동으로 완전 중앙 */}
-        <h1 className="text-white text-lg font-bold text-center">
+        <h1
+          className="text-white text-lg text-center"
+          style={{
+            fontFamily: '"IBM Plex Sans KR", sans-serif',
+            fontWeight: "normal",
+          }}
+        >
           {currentDate}
         </h1>
 

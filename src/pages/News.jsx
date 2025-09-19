@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { getNews } from "../api/NewsApi";
+import { getNewsByDate } from "../api/NewsApi";
+import useDateStore from "../store/useDateStore";
 
 const News = () => {
   const [selectedFilter, setSelectedFilter] = useState("최신순");
@@ -14,6 +15,7 @@ const News = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const { currentDate } = useDateStore();
 
   const handleNewsClick = (news) => {
     setSelectedNews(news);
@@ -28,32 +30,69 @@ const News = () => {
     const fetchNews = async () => {
       try {
         setLoading(true);
-        const response = await getNews(page, size);
-        //페이지 정보 저장
-        setTotalPages(response.totalPage);
-        setTotalItems(response.dtoList.length);
-        //데이터 변환
-        const transformedData = response.dtoList.map((news) => ({
-          id: news.id,
-          symbol: news.ticker,
+        setError(null);
+
+        // currentDate가 없으면 기본 뉴스 조회
+        if (!currentDate) {
+          console.warn(
+            "[News] currentDate가 없습니다. 기본 뉴스를 조회합니다."
+          );
+          setNewsData([]);
+          setTotalPages(1);
+          setTotalItems(0);
+          return;
+        }
+
+        console.log("[News] 날짜별 뉴스 조회 시작:", {
+          currentDate,
+          page,
+          size,
+        });
+
+        // 날짜별 뉴스 조회
+        const response = await getNewsByDate(currentDate, page, size);
+
+        console.log("[News] 뉴스 응답 수신:", {
+          totalPage: response?.totalPage,
+          dtoListLength: response?.dtoList?.length,
+          raw: response,
+        });
+
+        // 페이지 정보 저장
+        setTotalPages(response.totalPage || 1);
+        setTotalItems(response.dtoList?.length || 0);
+
+        // 데이터 변환
+        const transformedData = (response.dtoList || []).map((news) => ({
+          id: news.newsId,
+          symbol: news.stockId,
           headline: news.title,
           source: news.source,
           timestamp: news.timePublished,
-          image: news.bannerImage || "기본이미지",
+          image: news.image || "기본이미지",
           summary: news.summary,
           url: news.url,
         }));
 
+        console.log("[News] 데이터 변환 완료:", {
+          transformedLength: transformedData.length,
+          sample: transformedData[0],
+        });
+
         setNewsData(transformedData);
       } catch (err) {
+        console.error("[News] 뉴스 조회 실패:", err);
         setError("뉴스 데이터를 불러오는데 실패했습니다.");
+        setNewsData([]);
+        setTotalPages(1);
+        setTotalItems(0);
       } finally {
         setLoading(false);
       }
     };
 
     fetchNews();
-  }, [page, size]);
+  }, [currentDate, page, size]);
 
   return (
     <div>
@@ -206,7 +245,7 @@ const News = () => {
 
             <div className="mb-4">
               <span className="text-sm font-semibold text-blue-600">
-                {selectedNews?.symbol}
+                {selectedNews?.title}
               </span>
             </div>
 
