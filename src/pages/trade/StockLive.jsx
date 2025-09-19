@@ -6,6 +6,13 @@ import axiosInstance from "../../util/axiosInstance";
 import { Button } from "@/components/ui/button";
 import useDateStore from "@/store/useDateStore";
 import useLoginStore from "@/store/useLoginStore";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function StockLive() {
   const { symbol } = useParams();
@@ -17,6 +24,8 @@ export default function StockLive() {
   const { currentDate } = useDateStore();
   const { lastProfileId } = useLoginStore();
   const [quantity, setQuantity] = useState(0);
+  const [trade, setTrade] = useState("");
+  const [executedQty, setExecutedQty] = useState(0); // 거래된 값
 
   // 매수/매도 로직
   const handleUpdateStockAmount = async (type, quantity) => {
@@ -37,6 +46,15 @@ export default function StockLive() {
         },
         { withCredentials: true }
       );
+
+      if (type === "BUY") {
+        setTrade("매수");
+      } else {
+        setTrade("매도");
+      }
+      setExecutedQty(quantity); // ✅ 거래된 수량 저장
+      setQuantity(0);
+      setShowModal(true);
     } catch (error) {
       console.error("Error fetching profiles:", error);
       return [];
@@ -81,6 +99,13 @@ export default function StockLive() {
       return null;
     return (Number(price) / Number(prevClose) - 1) * 100;
   }, [price, prevClose]);
+
+  const [showModal, setShowModal] = useState(false);
+
+  const handleModalClosed = () => {
+    setShowModal(false);
+    setQuantity(0);
+  };
 
   // 가격/등락률 계산: 타임라인이 있으면 DB 캔들 기반, 없으면 Redis 실시간
   useEffect(() => {
@@ -210,11 +235,12 @@ export default function StockLive() {
     };
   }, [s]);
   const handleDecrease = () => {
-    setQuantity(quantity - 1);
+    setQuantity((prev) => Math.max(0, prev - 1));
   };
 
   const handleIncrease = () => {
     setQuantity(quantity + 1);
+ 
   };
 
   return (
@@ -286,6 +312,21 @@ export default function StockLive() {
           매수
         </Button>
       </div>
+      <Dialog open={showModal} onOpenChange={handleModalClosed}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>구매 완료</DialogTitle>
+          </DialogHeader>
+          <p className="text-center text-lg mt-2">
+            {s} 주식 {executedQty}주 {trade}가 완료되었습니다.
+          </p>
+          <DialogFooter>
+            <Button className="w-full mt-4" onClick={() => setShowModal(false)}>
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
