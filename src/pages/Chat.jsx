@@ -14,6 +14,49 @@ import axiosInstance from "@/util/axiosInstance";
 const Chat = () => {
   const [activeTab, setActiveTab] = useState("analysis");
   const { email, lastProfileId } = useLoginStore();
+  
+  // 시뮬레이션 상태 관리
+  const [simulation, setSimulation] = useState({
+    ticker: "AAPL",
+    today: new Date().toISOString().split('T')[0],
+    trainDays: 110,
+    predictSteps: 3,
+    loading: false,
+    result: null,
+    error: null
+  });
+
+  // API 호출 함수
+  const handleSimulationSubmit = async () => {
+    setSimulation(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      const response = await axiosInstance.post('http://localhost:8090/dev/agent/predict', {
+        ticker: simulation.ticker,
+        today: simulation.today,
+        train_days: simulation.trainDays,
+        predict_steps: simulation.predictSteps
+      });
+      
+      setSimulation(prev => ({ 
+        ...prev, 
+        loading: false, 
+        result: response.data 
+      }));
+    } catch (error) {
+      console.error('시뮬레이션 API 오류:', error);
+      setSimulation(prev => ({ 
+        ...prev, 
+        loading: false, 
+        error: '시뮬레이션 중 오류가 발생했습니다.' 
+      }));
+    }
+  };
+
+  // 입력값 변경 핸들러
+  const handleSimulationChange = (field, value) => {
+    setSimulation(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 pb-20">
@@ -266,38 +309,142 @@ const Chat = () => {
                 {/* 시뮬레이션 */}
                 <div className="bg-green-500 bg-opacity-10 rounded-xl p-4 border border-green-500 border-opacity-30">
                   <h3 className="font-medium text-white mb-3 text-sm">
-                    🎮 가상 시나리오
+                    🎮 AI 주식 예측 시뮬레이션
                   </h3>
                   <div className="space-y-3">
-                    <select className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white">
-                      <option>AAPL - 애플</option>
-                      <option>MSFT - 마이크로소프트</option>
-                    </select>
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* 티커 입력 */}
+                    <div>
+                      <label className="block text-xs text-gray-300 mb-1">티커 심볼</label>
                       <input
-                        type="number"
-                        placeholder="투자금액"
-                        className="px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-gray-400"
+                        type="text"
+                        value={simulation.ticker}
+                        onChange={(e) => handleSimulationChange('ticker', e.target.value.toUpperCase())}
+                        placeholder="예: AAPL"
+                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-gray-400"
                       />
-                      <select className="px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white">
-                        <option>1개월</option>
-                        <option>3개월</option>
-                        <option>6개월</option>
-                      </select>
                     </div>
-                    <button className="w-full bg-green-600 text-white py-2 px-4 rounded-lg font-medium text-sm hover:bg-green-700">
-                      시뮬레이션 실행
+                    
+                    {/* 기준 날짜 */}
+                    <div>
+                      <label className="block text-xs text-gray-300 mb-1">기준 날짜</label>
+                      <input
+                        type="date"
+                        value={simulation.today}
+                        onChange={(e) => handleSimulationChange('today', e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
+                      />
+                    </div>
+                    
+                    {/* 학습 기간과 예측 일수 */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">학습 일수</label>
+                        <input
+                          type="number"
+                          value={simulation.trainDays}
+                          onChange={(e) => handleSimulationChange('trainDays', parseInt(e.target.value))}
+                          min="30"
+                          max="365"
+                          className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-300 mb-1">예측 일수</label>
+                        <input
+                          type="number"
+                          value={simulation.predictSteps}
+                          onChange={(e) => handleSimulationChange('predictSteps', parseInt(e.target.value))}
+                          min="1"
+                          max="30"
+                          className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
+                        />
+                      </div>
+                    </div>
+                    
+                    {/* 에러 메시지 */}
+                    {simulation.error && (
+                      <div className="bg-red-500 bg-opacity-20 border border-red-500 border-opacity-50 rounded-lg p-3">
+                        <p className="text-xs text-red-300">{simulation.error}</p>
+                      </div>
+                    )}
+                    
+                    <button 
+                      onClick={handleSimulationSubmit}
+                      disabled={simulation.loading}
+                      className="w-full bg-green-600 text-white py-2 px-4 rounded-lg font-medium text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {simulation.loading ? '예측 중...' : 'AI 예측 실행'}
                     </button>
                   </div>
-                  <div className="mt-4 bg-slate-700 rounded-lg p-3">
-                    <div className="text-xs text-gray-400 mb-2">예상 결과</div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-white">예상 수익</span>
-                      <span className="font-bold text-green-400">
-                        +₩2,670K (+8.5%)
-                      </span>
+                  
+                  {/* 결과 표시 */}
+                  {simulation.result && (
+                    <div className="mt-4 space-y-4">
+                      {/* 기본 정보 */}
+                      <div className="bg-slate-700 rounded-lg p-3">
+                        <div className="text-xs text-gray-400 mb-2">예측 결과</div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <div className="text-gray-300">종목</div>
+                            <div className="font-medium text-white">{simulation.result.ticker}</div>
+                          </div>
+                          <div>
+                            <div className="text-gray-300">기준가격</div>
+                            <div className="font-medium text-white">${simulation.result.last_price?.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* 예측 데이터 */}
+                      {simulation.result.predicted && simulation.result.predicted.length > 0 && (
+                        <div className="bg-slate-700 rounded-lg p-3">
+                          <div className="text-xs text-gray-400 mb-2">일별 예측</div>
+                          <div className="space-y-2">
+                            {simulation.result.predicted.map((prediction, index) => {
+                              const isPositive = prediction.return_rate >= 0;
+                              return (
+                                <div key={index} className="flex justify-between items-center text-xs">
+                                  <span className="text-gray-300">{prediction.day}</span>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-white">${prediction.price?.toFixed(2)}</span>
+                                    <span className={`font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                      {isPositive ? '+' : ''}{
+                                        prediction.return_rate.toFixed(2)
+                                      }%
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 차트 이미지 */}
+                      {simulation.result.chart_full && (
+                        <div className="bg-slate-700 rounded-lg p-3">
+                          <div className="text-xs text-gray-400 mb-2">예측 차트</div>
+                          <img 
+                            src={`data:image/png;base64,${simulation.result.chart_full}`}
+                            alt="주식 예측 차트"
+                            className="w-full rounded-lg"
+                          />
+                        </div>
+                      )}
+                      
+                      {/* 30일 차트 */}
+                      {simulation.result.chart_30d && (
+                        <div className="bg-slate-700 rounded-lg p-3">
+                          <div className="text-xs text-gray-400 mb-2">최근 30일 차트</div>
+                          <img 
+                            src={`data:image/png;base64,${simulation.result.chart_30d}`}
+                            alt="최근 30일 차트"
+                            className="w-full rounded-lg"
+                          />
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* 리밸런싱 추천 */}
