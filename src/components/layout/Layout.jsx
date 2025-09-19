@@ -24,6 +24,7 @@ export const Header = () => {
   console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
@@ -80,18 +81,28 @@ export const Header = () => {
             fontWeight: "normal",
           }}
         >
-          {currentDate}
+          {location.pathname === "/" ||
+          location.pathname === "/register" ||
+          lastProfileId === null ? (
+            <h1>FINT</h1>
+          ) : (
+            <h1>{currentDate}</h1>
+          )}
         </h1>
 
         {/* 오른쪽 */}
         <div className="flex justify-end">
-          <Button
-            onClick={handleNextButtonClick}
-            className="m-0"
-            variant="confirm"
-          >
-            턴 종료
-          </Button>
+          {location.pathname === "/" || location.pathname === "/register" || lastProfileId === null ? (
+            <h1>FINT</h1>
+          ) : (
+            <Button
+              onClick={handleNextButtonClick}
+              className="m-0"
+              variant="confirm"
+            >
+              턴 종료
+            </Button>
+          )}
         </div>
       </div>
 
