@@ -465,20 +465,23 @@ export function TradeRealtimeWidget({ symbol, theme = "light", autosize = true, 
 }
 
 // -------- Unified Wrapper --------
-export default function UnifiedChart({ symbol, defaultMode = "historical", initialYear, initialMonth, initialDay, onCandlesLoaded, autoLoad }) {
+export default function UnifiedChart({ symbol, defaultMode = "historical", initialYear, initialMonth, initialDay, onCandlesLoaded, autoLoad, hideModeToggle = false, lockedMode }) {
   const [mode, setMode] = useState(defaultMode);
-  const isHistorical = mode === "historical";
+  const effectiveMode = lockedMode || mode;
+  const isHistorical = effectiveMode === "historical";
   const Chart = useMemo(() => (isHistorical ? HistoricalChart : TradeRealtimeWidget), [isHistorical]);
-  const chartKey = `${mode}-${symbol}`;
+  const chartKey = `${effectiveMode}-${symbol}`;
 
   return (
     <div>
-      <div className="row" style={{ marginBottom: 8 }}>
-        <div className="seg">
-          <button className={`seg-btn ${isHistorical ? 'active' : ''}`} onClick={() => setMode('historical')}>과거</button>
-          <button className={`seg-btn ${!isHistorical ? 'active' : ''}`} onClick={() => setMode('realtime')}>실시간</button>
+      {!hideModeToggle && (
+        <div className="row" style={{ marginBottom: 8 }}>
+          <div className="seg">
+            <button className={`seg-btn ${isHistorical ? 'active' : ''}`} onClick={() => setMode('historical')}>과거</button>
+            <button className={`seg-btn ${!isHistorical ? 'active' : ''}`} onClick={() => setMode('realtime')}>실시간</button>
+          </div>
         </div>
-      </div>
+      )}
       <Chart
         key={chartKey}
         symbol={symbol}
