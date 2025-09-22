@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { TradeRealtimeWidget } from "../../components/UnifiedChart";
+import UnifiedChart, { TradeRealtimeWidget } from "../../components/UnifiedChart";
 import axios from "../../util/axiosInstance";
 import axiosInstance from "../../util/axiosInstance";
 import { Button } from "@/components/ui/button";
@@ -68,22 +68,38 @@ export default function StockLive() {
     } catch (_) {
       return null;
     }
-  }, []);
+  }, [lastProfileId]);
 
-  const timelineFrom = profile?.timelineFrom || null; // ISO string expected
-  const [simDate, setSimDate] = useState(() => {
-    if (!timelineFrom) return { year: null, month: null, day: null };
-    const d = new Date(timelineFrom);
-    if (Number.isNaN(d.getTime()))
-      return { year: null, month: null, day: null };
+  // 실시간 여부: timelineId === 9 과 동일하게 판단 (Stocks.jsx와 일치)
+  const isRealtime = useMemo(() => {
+    if (profile?.timelineId != null) {
+      return Number(profile.timelineId) === 9;
+    }
+    return false;
+  }, [profile?.timelineId]);
+  const isHistorical = !isRealtime;
+
+  // 과거 모드일 때 사용할 시뮬레이션 날짜
+  const simDate = useMemo(() => {
+    if (!isHistorical) return null;
+    const dateToUse = currentDate || profile?.timelineFrom;
+    if (!dateToUse) return null;
+    const d = new Date(dateToUse);
+    if (Number.isNaN(d.getTime())) return null;
     return {
       year: d.getUTCFullYear(),
       month: d.getUTCMonth() + 1,
       day: d.getUTCDate(),
     };
-  });
+  }, [isHistorical, currentDate, profile?.timelineFrom, lastProfileId]);
 
-  const isHistorical = Boolean(simDate.year && simDate.month && simDate.day);
+  const dateKey = useMemo(() => {
+    if (!isHistorical || !simDate) return null;
+    const y = String(simDate.year);
+    const m = String(simDate.month).padStart(2, "0");
+    const d = String(simDate.day).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
 
   const change = useMemo(() => {
     if (!Number.isFinite(Number(price)) || !Number.isFinite(Number(prevClose)))
@@ -107,66 +123,35 @@ export default function StockLive() {
     setQuantity(0);
   };
 
-  // 가격/등락률 계산: 타임라인이 있으면 DB 캔들 기반, 없으면 Redis 실시간
+  // 가격/등락률 계산: 과거는 스냅샷(/db/snapshot)과 동일 소스 사용, 실시간은 Redis
   useEffect(() => {
     let active = true;
 
     async function fetchHistorical() {
-      if (!s || !isHistorical) return;
+      if (!s || !isHistorical || !dateKey) return;
       try {
-        const base = new Date(
-          Date.UTC(simDate.year, simDate.month - 1, simDate.day)
-        );
-        const selectedEpoch = Math.floor(base.getTime() / 1000);
-        const prevEpoch = selectedEpoch - 86400;
-        const curFrom = prevEpoch;
-        const curTo = selectedEpoch + 86400 * 7;
-        const prevFrom = prevEpoch - 86400 * 7;
-        const prevTo = prevEpoch;
-        const [curRes, prevRes] = await Promise.all([
-          axios.get("/db/candles", {
-            params: { ticker: s, from: curFrom, to: curTo },
-          }),
-          axios.get("/db/candles", {
-            params: { ticker: s, from: prevFrom, to: prevTo },
-          }),
-        ]);
-        const curT = curRes?.data?.timestamps || [];
-        const curO = curRes?.data?.opens || [];
-        let currentOpen = null;
-        for (let i = 0; i < curT.length; i++) {
-          if (curT[i] >= selectedEpoch) {
-            currentOpen = curO[i];
-            break;
-          }
-        }
-        const prevT = prevRes?.data?.timestamps || [];
-        const prevC = prevRes?.data?.closes || [];
-        let prevCloseVal = null;
-        for (let i = prevT.length - 1; i >= 0; i--) {
-          if (prevT[i] <= prevEpoch) {
-            prevCloseVal = prevC[i];
-            break;
-          }
-        }
-        if (!active) return;
-        if (
-          typeof currentOpen === "number" &&
-          typeof prevCloseVal === "number"
-        ) {
-          setPrice(currentOpen);
-          setPrevClose(prevCloseVal);
-          setErr(null);
-        } else {
+        const resp = await axios.get("/db/snapshot", { params: { date: dateKey, symbols: s, page: 1, size: 1 } });
+        const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+        const row = rows.find((r) => String(r?.symbol || "").toUpperCase() === s) || rows[0];
+        if (!row) {
+          if (!active) return;
           setPrice(null);
           setPrevClose(null);
-          setErr("선택일 가격 데이터를 찾을 수 없습니다.");
+          setErr("스냅샷 데이터 없음");
+          return;
         }
+        const cur = parseFloat(String(row.price ?? "").replace("$", ""));
+        const chg = parseFloat(String(row.change ?? "").replace("+", ""));
+        const prev = Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
+        if (!active) return;
+        setPrice(Number.isFinite(cur) ? cur : null);
+        setPrevClose(Number.isFinite(prev) ? prev : null);
+        setErr(null);
       } catch (_) {
         if (!active) return;
         setPrice(null);
         setPrevClose(null);
-        setErr("DB에서 가격을 불러오지 못했습니다.");
+        setErr("스냅샷에서 가격을 불러오지 못했습니다.");
       }
     }
 
@@ -198,7 +183,7 @@ export default function StockLive() {
     return () => {
       active = false;
     };
-  }, [s, isHistorical, simDate]);
+  }, [s, isHistorical, dateKey]);
   useEffect(() => {
     let timer = null;
     if (!s) {
@@ -206,6 +191,10 @@ export default function StockLive() {
       setPrice(null);
       setPrevClose(null);
       return;
+    }
+    if (isHistorical) {
+      // 과거 모드에서는 Redis를 호출하지 않음
+      return () => { if (timer) clearInterval(timer); };
     }
     const fetchFromRedis = async () => {
       try {
@@ -217,8 +206,7 @@ export default function StockLive() {
         }
         const cur = parseFloat(String(data.price || "").replace("$", ""));
         const chg = parseFloat(String(data.change || "").replace("+", ""));
-        const prev =
-          Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
+        const prev = Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
         setPrice(Number.isFinite(cur) ? cur : null);
         setPrevClose(Number.isFinite(prev) ? prev : null);
         setErr(null);
@@ -233,7 +221,7 @@ export default function StockLive() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [s]);
+  }, [s, isHistorical]);
   const handleDecrease = () => {
     setQuantity((prev) => Math.max(0, prev - 1));
   };
@@ -271,31 +259,41 @@ export default function StockLive() {
           {err && <span className="muted">{err}</span>}
         </div>
       </div>
-      <div style={{ height: 600 }}>
-        <TradeRealtimeWidget symbol={s} />
-      </div>
-      <div className=" flex items-center space-x-2 mt-4">
-        {/* 차트는 상단에 있다고 가정 */}
+      {/* 주문 UI는 차트/보조지표 아래로 이동 */}
+      <UnifiedChart
+        symbol={s}
+        defaultMode={isHistorical ? "historical" : "realtime"}
+        lockedMode={isHistorical ? "historical" : "realtime"}
+        hideModeToggle={true}
+        initialYear={simDate?.year || undefined}
+        initialMonth={simDate?.month || undefined}
+        initialDay={simDate?.day || undefined}
+        autoLoad={isHistorical}
+      />
 
-        <button
-          onClick={handleDecrease}
-          className="bg-gray-200 hover:bg-gray-300 text-xl font-bold px-3 py-1 rounded"
-        >
-          -
-        </button>
-
-        <div className="text-white w-12 text-center border rounded px-2 py-1">
-          {quantity}
+      {/* 수량 선택 UI - 개선된 디자인 */}
+      <div className="card" style={{ marginTop: 12, marginBottom: 8 }}>
+        <div className="row" style={{ gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <button onClick={handleDecrease} className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded">-</button>
+            <input
+              type="number"
+              min={0}
+              value={quantity}
+              onChange={(e) => setQuantity(Math.max(0, Number(e.target.value) || 0))}
+              className="w-20 text-center bg-slate-900 text-white border border-slate-600 rounded px-2 py-1"
+            />
+            <button onClick={handleIncrease} className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded">+</button>
+          </div>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {[1,5,10,20,50].map((n) => (
+              <button key={n} onClick={() => setQuantity(n)} className="px-2 py-1 text-sm bg-slate-800 text-white border border-slate-600 rounded hover:bg-slate-700">{n}</button>
+            ))}
+          </div>
         </div>
-
-        <button
-          onClick={handleIncrease}
-          className="bg-gray-200 hover:bg-gray-300 text-xl font-bold px-3 py-1 rounded"
-        >
-          +
-        </button>
       </div>
 
+      {/* 주문 버튼 */}
       <div className="flex gap-4 h-[3rem] mb-5">
         <Button
           className="w-full h-full rounded-[0.8rem] text-[20px]"
@@ -312,6 +310,7 @@ export default function StockLive() {
           매수
         </Button>
       </div>
+      
       <Dialog open={showModal} onOpenChange={handleModalClosed}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
