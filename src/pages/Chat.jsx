@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -10,6 +10,93 @@ import {
 } from "lucide-react";
 import useLoginStore from "@/store/useLoginStore";
 import axiosInstance from "@/util/axiosInstance";
+
+// 툴팁 컴포넌트
+const Tooltip = ({ children, content }) => {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipStyle, setTooltipStyle] = useState({});
+  const [arrowStyle, setArrowStyle] = useState({});
+  const tooltipRef = useRef(null);
+
+  const handleMouseEnter = (event) => {
+    setShowTooltip(true);
+    
+    // 화면 위치에 따라 툴팁 위치 결정
+    setTimeout(() => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const windowWidth = window.innerWidth;
+      const tooltipWidth = 256; // w-64 = 16rem = 256px
+      const padding = 16; // 여백
+      
+      let newTooltipStyle = {};
+      let newArrowStyle = {};
+      
+      // 왼쪽으로 잘리는 경우
+      if (rect.left < tooltipWidth / 2 + padding) {
+        newTooltipStyle = {
+          left: '0px',
+          transform: 'none'
+        };
+        newArrowStyle = {
+          left: `${Math.max(16, rect.width / 2)}px`,
+          transform: 'none'
+        };
+      }
+      // 오른쪽으로 잘리는 경우  
+      else if (rect.right > windowWidth - tooltipWidth / 2 - padding) {
+        newTooltipStyle = {
+          right: '0px',
+          left: 'auto',
+          transform: 'none'
+        };
+        newArrowStyle = {
+          right: `${Math.max(16, rect.width / 2)}px`,
+          left: 'auto',
+          transform: 'none'
+        };
+      }
+      // 중앙 정렬 (기본)
+      else {
+        newTooltipStyle = {
+          left: '50%',
+          transform: 'translateX(-50%)'
+        };
+        newArrowStyle = {
+          left: '50%',
+          transform: 'translateX(-50%)'
+        };
+      }
+      
+      setTooltipStyle(newTooltipStyle);
+      setArrowStyle(newArrowStyle);
+    }, 10);
+  };
+
+  return (
+    <div className="relative inline-block">
+      <div
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={() => setShowTooltip(false)}
+        className="cursor-help"
+      >
+        {children}
+      </div>
+      {showTooltip && (
+        <div 
+          ref={tooltipRef}
+          className="absolute bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50 w-64 text-center"
+          style={tooltipStyle}
+        >
+          <div className="whitespace-pre-line">{content}</div>
+          <div 
+            className="absolute top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"
+            style={arrowStyle}
+          ></div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Chat = () => {
   const [activeTab, setActiveTab] = useState("analysis");
@@ -404,7 +491,9 @@ const Chat = () => {
                               const isPositive = prediction.return_rate >= 0;
                               return (
                                 <div key={index} className="flex justify-between items-center text-xs">
-                                  <span className="text-gray-300">{prediction.day}</span>
+                                  <span className="text-gray-300">
+                                    {prediction.date} ({prediction.day}일차 예측)
+                                  </span>
                                   <div className="flex items-center space-x-2">
                                     <span className="text-white">${prediction.price?.toFixed(2)}</span>
                                     <span className={`font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
@@ -417,6 +506,150 @@ const Chat = () => {
                               );
                             })}
                           </div>
+                        </div>
+                      )}
+                      
+                      {/* 투자 분석 */}
+                      {simulation.result.investment_analysis && (
+                        <div className="bg-slate-700 rounded-lg p-3">
+                          <div className="text-xs text-gray-400 mb-3">투자 분석</div>
+                          
+                          {/* 추천 정보 */}
+                          <div className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-white">
+                                {simulation.result.investment_analysis.recommendation}
+                              </span>
+                              <div className="flex items-center space-x-2">
+                                <span className={`text-xs px-2 py-1 rounded ${
+                                  simulation.result.investment_analysis.action === 'BUY' 
+                                    ? 'bg-green-600 text-white' 
+                                    : simulation.result.investment_analysis.action === 'SELL'
+                                    ? 'bg-red-600 text-white'
+                                    : 'bg-yellow-600 text-white'
+                                }`}>
+                                  {simulation.result.investment_analysis.action}
+                                </span>
+                                <div className="flex items-center space-x-2">
+                                  {/* 점수 바 표시 */}
+                                  <div className="flex items-center space-x-1">
+                                    <div className="flex">
+                                      {[-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((value) => (
+                                        <div
+                                          key={value}
+                                          className={`w-2 h-2 rounded-sm ${
+                                            value <= simulation.result.investment_analysis.score
+                                              ? value < 0 
+                                                ? 'bg-red-500' 
+                                                : value === 0 
+                                                ? 'bg-gray-400' 
+                                                : 'bg-green-500'
+                                              : 'bg-gray-600'
+                                          } ${value !== 5 ? 'mr-0.5' : ''}`}
+                                        ></div>
+                                      ))}
+                                    </div>
+                                    <span className={`text-xs font-medium ${
+                                      simulation.result.investment_analysis.score > 0 
+                                        ? 'text-green-400' 
+                                        : simulation.result.investment_analysis.score < 0 
+                                        ? 'text-red-400' 
+                                        : 'text-gray-300'
+                                    }`}>
+                                      {simulation.result.investment_analysis.score > 0 ? '+' : ''}{simulation.result.investment_analysis.score}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <Tooltip content="신뢰도는 AI 분석의 정확성을 나타냅니다. HIGH: 매우 신뢰할 만함, MEDIUM: 적당히 신뢰할 만함, LOW: 신중한 판단 필요">
+                              <div className="text-xs text-gray-300 mb-2 border-b border-dotted border-gray-500 inline-block">
+                                신뢰도: {simulation.result.investment_analysis.confidence}
+                              </div>
+                            </Tooltip>
+                          </div>
+
+                          {/* 핵심 지표 */}
+                          <div className="grid grid-cols-2 gap-3 mb-4">
+                            <div className="text-xs">
+                              <Tooltip content="현재 주식의 실시간 가격입니다. 예측 분석의 기준점이 되는 가격입니다.">
+                                <div className="text-gray-400 border-b border-dotted border-gray-500">현재가격</div>
+                              </Tooltip>
+                              <div className="text-white font-medium">
+                                ${simulation.result.investment_analysis.metrics?.current_price?.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="text-xs">
+                              <Tooltip content="AI가 예측하는 향후 기간의 평균 주가입니다. 현재가와 비교하여 상승/하락 여부를 판단할 수 있습니다.">
+                                <div className="text-gray-400 border-b border-dotted border-gray-500">예상평균가격</div>
+                              </Tooltip>
+                              <div className="text-white font-medium">
+                                ${simulation.result.investment_analysis.metrics?.predicted_avg_price?.toFixed(2)}
+                              </div>
+                            </div>
+                            <div className="text-xs">
+                              <Tooltip content="투자 기간 동안 예상되는 총 수익률입니다. 배당금과 주가 상승분을 모두 포함한 수치입니다.">
+                                <div className="text-gray-400 border-b border-dotted border-gray-500">기대수익률</div>
+                              </Tooltip>
+                              <div className="text-green-400 font-medium">
+                                +{simulation.result.investment_analysis.metrics?.expected_total_return?.toFixed(1)}%
+                              </div>
+                            </div>
+                            <div className="text-xs">
+                              <Tooltip content="주가가 현재가보다 상승할 확률입니다. 70% 이상이면 상승 가능성이 높다고 판단할 수 있습니다.">
+                                <div className="text-gray-400 border-b border-dotted border-gray-500">상승확률</div>
+                              </Tooltip>
+                              <div className="text-white font-medium">
+                                {simulation.result.investment_analysis.metrics?.upside_probability?.toFixed(0)}%
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 리스크 지표 */}
+                          <div className="mb-4">
+                            <div className="text-xs text-gray-400 mb-2">리스크 지표</div>
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div>
+                                <Tooltip content="VaR (Value at Risk): 95% 신뢰도에서 하루 동안 발생할 수 있는 최대 손실률입니다. 예를 들어 -2.5%라면 95%의 확률로 하루 손실이 2.5%를 넘지 않는다는 의미입니다.">
+                                  <div className="text-gray-400 border-b border-dotted border-gray-500">VaR (95%)</div>
+                                </Tooltip>
+                                <div className="text-red-400 font-medium">
+                                  {simulation.result.investment_analysis.risk_metrics?.var_95?.toFixed(1)}%
+                                </div>
+                              </div>
+                              <div>
+                                <Tooltip content="최대 예상 손실: 예측 기간 동안 발생할 수 있는 최악의 시나리오에서의 손실률입니다. 투자 전 리스크 허용 범위를 확인하는 데 중요한 지표입니다.">
+                                  <div className="text-gray-400 border-b border-dotted border-gray-500">최대손실</div>
+                                </Tooltip>
+                                <div className="text-red-400 font-medium">
+                                  {simulation.result.investment_analysis.risk_metrics?.max_expected_loss?.toFixed(1)}%
+                                </div>
+                              </div>
+                              <div>
+                                <Tooltip content="샤프 비율: 위험 대비 수익률을 나타내는 지표입니다. 1.0 이상이면 좋은 투자, 2.0 이상이면 매우 우수한 투자로 평가됩니다. 높을수록 같은 위험 대비 더 높은 수익을 의미합니다.">
+                                  <div className="text-gray-400 border-b border-dotted border-gray-500">샤프비율</div>
+                                </Tooltip>
+                                <div className="text-white font-medium">
+                                  {simulation.result.investment_analysis.risk_metrics?.estimated_sharpe_ratio?.toFixed(1)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 투자 신호 */}
+                          {simulation.result.investment_analysis.signals && simulation.result.investment_analysis.signals.length > 0 && (
+                            <div>
+                              <div className="text-xs text-gray-400 mb-2">투자 신호</div>
+                              <div className="space-y-1">
+                                {simulation.result.investment_analysis.signals.map((signal, index) => (
+                                  <div key={index} className="flex items-center space-x-2 text-xs">
+                                    <div className="w-1 h-1 bg-green-400 rounded-full"></div>
+                                    <span className="text-gray-300">{signal}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                       
