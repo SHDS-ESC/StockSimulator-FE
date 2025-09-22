@@ -22,6 +22,7 @@ const HomePage = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
+  const [startInvested, setStartInvested] = useState([]);
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
     totalInvested: 0,
@@ -29,6 +30,9 @@ const HomePage = () => {
     cashBalance: 0,
     nickname: "프로필을 선택해주세요",
     state: true,
+    change: 0,
+    changeAmount: 0,
+    seedMoney :0
   });
 
   // 실시간 주식 데이터 훅 사용
@@ -126,16 +130,21 @@ const HomePage = () => {
   const loadProfile = async () => {
     try {
       const list = await fetchProfiles();
-      const stcokList = await fetchStocks();
+      const totalCurrentPrice = await fetchStocks();
       // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
       if (lastProfileId && Number(lastProfileId) > 0) {
-        setHoldingStocks(stcokList);
         try {
           const response = await axiosInstance.get(
             `userprofile/profile/${lastProfileId}`,
             { withCredentials: true }
           );
-          setSelectedProfile(response.data);
+          setStartInvested(response.data.totalInvested);
+          console.log("인" + startInvested);
+          console.log("커" + totalCurrentPrice);
+          setSelectedProfile({
+            ...response.data,
+            totalInvested: totalCurrentPrice,
+          });
           localStorage.setItem("newProfile", JSON.stringify(response.data));
           setCurrentDate(response.data.processDate);
         } catch (e) {
@@ -171,14 +180,18 @@ const HomePage = () => {
   // 보유 주식 리스트 불러오기
   const fetchStocks = async () => {
     if (!email || String(email).trim() === "") return [];
+    const isoDate =
+      currentDate instanceof Date
+        ? currentDate.toISOString().slice(0, 10)
+        : currentDate;
     try {
       const response = await axiosInstance.get(
-        `holdings/stocks/${lastProfileId}`,
+        `holdings/stocks/${lastProfileId}/${isoDate}`,
         { withCredentials: true }
       );
-      const stockList = response.data || [];
+      const stockList = response.data.holdingsResponseDTOS || [];
       setHoldingStocks(stockList);
-      return stockList;
+      return response.data.totalCurrentPrice;
     } catch (error) {
       console.error("Error fetching profiles:", error);
       return [];
@@ -188,7 +201,7 @@ const HomePage = () => {
   useEffect(() => {
     if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
     loadProfile();
-  }, [email, lastProfileId]);
+  }, [email, lastProfileId, currentDate]);
 
   // 프로필 선택
   const handleProfileSelect = (profile) => {
@@ -309,9 +322,25 @@ const HomePage = () => {
         {/* 총 잔고 */}
         <div className="mb-4">
           <h3 className="text-white text-3xl font-bold">
-            $ {selectedProfile?.cashBalance}
+            ${selectedProfile.cashBalance + selectedProfile.totalInvested}
           </h3>
-          <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
+          {selectedProfile.totalAssets > 0 &&
+            (() => {
+              const totalCurrent =
+                selectedProfile.cashBalance + selectedProfile.totalInvested;
+              const totalInitial = selectedProfile.seedMoney;
+              const diffPercent = (
+                ((totalCurrent - totalInitial) / totalInitial) *
+                100
+              ).toFixed(10);
+              return (
+                <p
+                  className={`text-xs ${diffPercent >= 0 ? "text-red-500" : "text-blue-400"}`}
+                >
+                  {diffPercent >= 0 ? `+${diffPercent}%` : `${diffPercent}%`}
+                </p>
+              );
+            })()}
         </div>
 
         {/* 투자/현금 정보 */}
@@ -319,13 +348,13 @@ const HomePage = () => {
           <div>
             <p className="text-gray-400 text-xs mb-1">투자</p>
             <p className="text-white text-lg font-semibold">
-              $ {selectedProfile?.totalAssets}
+              $ {selectedProfile?.totalInvested}
             </p>
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-1">현금</p>
             <p className="text-white text-lg font-semibold">
-              $ {selectedProfile?.totalInvested}
+              $ {selectedProfile?.cashBalance}
             </p>
           </div>
         </div>
@@ -365,20 +394,21 @@ const HomePage = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  
-                <div className="text-right">
-                  <p className="text-white font-semibold text-[10px] mb-2">{stock.quantity}주</p>
-                </div>
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-[10px] mb-2">
+                      {stock.quantity}주
+                    </p>
+                  </div>
                   <p className="text-white font-semibold text-sm">
                     $ {stock.price}
                   </p>
                   <p
                     className={`text-xs ${stock.change > 0 ? "text-red-500" : "text-blue-400"}`}
                   >
-                    $ {stock.change}%
+                    ${stock.changeAmount} ({stock.change})%
                   </p>
-              </div>
                 </div>
+              </div>
             ))}
           </div>
         </div>
