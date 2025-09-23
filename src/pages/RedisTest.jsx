@@ -17,7 +17,7 @@ const RedisTest = () => {
     setLoading(true);
     setMessage('Redis 초기화 중...');
     try {
-      const response = await axiosInstance.post('/market/redis/init');
+      const response = await axiosInstance.post('/redis/init');
       setMessage(response.data);
     } catch (error) {
       if (error.response?.status === 404) {
@@ -35,7 +35,7 @@ const RedisTest = () => {
     setLoading(true);
     setMessage('스케줄러 시작 중...');
     try {
-      const response = await axiosInstance.post('/market/redis/scheduler/start');
+      const response = await axiosInstance.post('/redis/scheduler/start');
       setMessage(response.data);
       setSchedulerStatus('실행 중');
       startLogPolling();
@@ -52,7 +52,7 @@ const RedisTest = () => {
     setLoading(true);
     setMessage('스케줄러 중지 중...');
     try {
-      const response = await axiosInstance.post('/market/redis/scheduler/stop');
+      const response = await axiosInstance.post('/redis/scheduler/stop');
       setMessage(response.data);
       setSchedulerStatus('중지됨');
       stopLogPolling();
@@ -80,7 +80,7 @@ const RedisTest = () => {
     setLoading(true);
     setMessage('스케줄러 수동 실행 중...');
     try {
-      const response = await axiosInstance.post('/market/redis/scheduler/run-now');
+      const response = await axiosInstance.post('/redis/scheduler/run-now');
       setMessage(response.data);
       addLog('🚀 스케줄러 수동 실행 요청됨');
     } catch (error) {
@@ -96,7 +96,7 @@ const RedisTest = () => {
     setMessage('설정 적용 중...');
     try {
       const { batchSize, perRequestDelayMs, sleepBetweenBatchesMs, verboseLog, enabled } = cfg;
-      const res = await axiosInstance.post('/market/redis/config', { batchSize, perRequestDelayMs, sleepBetweenBatchesMs, verboseLog, enabled });
+      const res = await axiosInstance.post('/redis/config', { batchSize, perRequestDelayMs, sleepBetweenBatchesMs, verboseLog, enabled });
       if (res.data?.status === 'ok') {
         setMessage('설정 적용 완료');
         addLog(`⚙️ 설정 적용: batch=${batchSize}, delay=${perRequestDelayMs}ms, sleep=${sleepBetweenBatchesMs}ms, verbose=${String(verboseLog)}, enabled=${String(enabled)}`);
@@ -117,7 +117,7 @@ const RedisTest = () => {
     pollTimerRef.current = window.setInterval(async () => {
       try {
         const after = lastLogIdRef.current || 0;
-        const res = await axiosInstance.get(`/market/redis/logs${after ? `?after=${after}` : ''}`);
+        const res = await axiosInstance.get(`/redis/logs${after ? `?after=${after}` : ''}`);
         const entries = res.data?.entries || [];
         if (Array.isArray(entries) && entries.length) {
           setLogs(prev => [...prev, ...entries.map(e => `[${e.time}] ${e.message}`)]);
@@ -153,7 +153,7 @@ const RedisTest = () => {
     setLoading(true);
     setMessage('redis/stocks 테스트 중...');
     try {
-      const res = await axiosInstance.get(`/market/redis/stocks`);
+      const res = await axiosInstance.get(`/redis/stocks`);
       setMessage(JSON.stringify(res.data, null, 2));
     } catch (e) { setMessage('redis/stocks 실패: ' + e.message); } finally { setLoading(false); }
   };
@@ -161,7 +161,7 @@ const RedisTest = () => {
     setLoading(true);
     setMessage('redis/stock 테스트 중...');
     try {
-      const res = await axiosInstance.get(`/market/redis/stock/${encodeURIComponent(testSymbol)}`);
+      const res = await axiosInstance.get(`/redis/stock/${encodeURIComponent(testSymbol)}`);
       setMessage(JSON.stringify(res.data, null, 2));
     } catch (e) { setMessage('redis/stock 실패: ' + e.message); } finally { setLoading(false); }
   };
@@ -330,8 +330,8 @@ const RedisTest = () => {
           <div className="flex flex-wrap gap-2 items-center mb-3">
             <input value={testSymbol} onChange={e=>setTestSymbol(e.target.value)} className="px-3 py-2 bg-slate-900 rounded" placeholder="심볼 (예: AAPL)" />
             <button onClick={testQuote} className="px-3 py-2 bg-blue-600 rounded hover:bg-blue-500">/market/quote</button>
-            <button onClick={testRedisStocks} className="px-3 py-2 bg-indigo-600 rounded hover:bg-indigo-500">/market/redis/stocks</button>
-            <button onClick={testRedisStock} className="px-3 py-2 bg-emerald-600 rounded hover:bg-emerald-500">/market/redis/stock/{'{' }symbol{ '}'}</button>
+            <button onClick={testRedisStocks} className="px-3 py-2 bg-indigo-600 rounded hover:bg-indigo-500">/redis/stocks</button>
+            <button onClick={testRedisStock} className="px-3 py-2 bg-emerald-600 rounded hover:bg-emerald-500">/redis/stock/{'{' }symbol{ '}'}</button>
           </div>
           <p className="text-xs text-gray-400">테스트 응답은 상단 "결과" 영역에 표시됩니다.</p>
         </div>

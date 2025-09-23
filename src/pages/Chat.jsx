@@ -7,9 +7,11 @@ import {
   Target,
   Award,
   AlertTriangle,
+  LineChart,
 } from "lucide-react";
 import useLoginStore from "@/store/useLoginStore";
 import axiosInstance from "@/util/axiosInstance";
+import PredictionChartModal from "../components/PredictionChartModal";
 
 // 툴팁 컴포넌트
 const Tooltip = ({ children, content }) => {
@@ -112,6 +114,9 @@ const Chat = () => {
     result: null,
     error: null
   });
+
+  // 모달 상태 관리
+  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // API 호출 함수
   const handleSimulationSubmit = async () => {
@@ -653,27 +658,20 @@ const Chat = () => {
                         </div>
                       )}
                       
-                      {/* 차트 이미지 */}
-                      {simulation.result.chart_full && (
+                      {/* 인터랙티브 차트 버튼 */}
+                      {simulation.result && (
                         <div className="bg-slate-700 rounded-lg p-3">
-                          <div className="text-xs text-gray-400 mb-2">예측 차트</div>
-                          <img 
-                            src={`data:image/png;base64,${simulation.result.chart_full}`}
-                            alt="주식 예측 차트"
-                            className="w-full rounded-lg"
-                          />
-                        </div>
-                      )}
-                      
-                      {/* 30일 차트 */}
-                      {simulation.result.chart_30d && (
-                        <div className="bg-slate-700 rounded-lg p-3">
-                          <div className="text-xs text-gray-400 mb-2">최근 30일 차트</div>
-                          <img 
-                            src={`data:image/png;base64,${simulation.result.chart_30d}`}
-                            alt="최근 30일 차트"
-                            className="w-full rounded-lg"
-                          />
+                          <div className="text-xs text-gray-400 mb-3">예측 차트</div>
+                          <button
+                            onClick={() => setIsChartModalOpen(true)}
+                            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200 flex items-center justify-center space-x-2"
+                          >
+                            <LineChart className="w-4 h-4" />
+                            <span>인터랙티브 차트 보기</span>
+                          </button>
+                          <p className="text-xs text-gray-400 mt-2 text-center">
+                            AI 예측 결과를 상세한 차트로 확인하세요
+                          </p>
                         </div>
                       )}
                     </div>
@@ -740,6 +738,20 @@ const Chat = () => {
           </div>
         </div>
       </div>
+
+      {/* 예측 차트 모달 */}
+      <PredictionChartModal
+        isOpen={isChartModalOpen}
+        onClose={() => setIsChartModalOpen(false)}
+        ticker={simulation.ticker}
+        baseDate={simulation.today}
+        lastPrice={simulation.result?.last_price}
+        predictionData={{
+          dates: simulation.result?.prediction_dates || [],
+          prices: simulation.result?.price_predictions || [],
+          returns: simulation.result?.return_predictions || []
+        }}
+      />
     </div>
   );
 };
