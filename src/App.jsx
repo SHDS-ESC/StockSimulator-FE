@@ -150,8 +150,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, skipNotice } = useDateStore();
-  const { isTurnOver, currentDate, setCurrentDate } = useDateStore();
+  const { isTurnOver, currentDate, setCurrentDate, skipNotice } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
