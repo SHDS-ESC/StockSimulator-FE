@@ -9,6 +9,8 @@ const RedisTest = () => {
   const [isLogging, setIsLogging] = useState(false);
   const [cfg, setCfg] = useState({ batchSize: 50, perRequestDelayMs: 1000, sleepBetweenBatchesMs: 60000, verboseLog: false, enabled: true });
   const [testSymbol, setTestSymbol] = useState('AAPL');
+  const [dbDays, setDbDays] = useState(7);
+  const [dbDate, setDbDate] = useState(new Date().toISOString().slice(0,10));
   const lastLogIdRef = useRef(0);
   const pollTimerRef = useRef(null);
 
@@ -166,6 +168,48 @@ const RedisTest = () => {
     } catch (e) { setMessage('redis/stock 실패: ' + e.message); } finally { setLoading(false); }
   };
 
+  // DB 과거 타임라인 테스트
+  const testDbCandles = async () => {
+    setLoading(true);
+    setMessage('db/candles 테스트 중...');
+    try {
+      const res = await axiosInstance.get('/db/candles', { params: { ticker: testSymbol, days: dbDays } });
+      setMessage(JSON.stringify(res.data, null, 2));
+    } catch (e) {
+      setMessage('db/candles 실패: ' + e.message);
+    } finally { setLoading(false); }
+  };
+  const testDbLastRange = async () => {
+    setLoading(true);
+    setMessage('db/last-range 테스트 중...');
+    try {
+      const res = await axiosInstance.get('/db/last-range', { params: { ticker: testSymbol, days: dbDays } });
+      setMessage(JSON.stringify(res.data, null, 2));
+    } catch (e) {
+      setMessage('db/last-range 실패: ' + e.message);
+    } finally { setLoading(false); }
+  };
+  const testDbSnapshot = async () => {
+    setLoading(true);
+    setMessage('db/snapshot 테스트 중...');
+    try {
+      const res = await axiosInstance.get('/db/snapshot', { params: { date: dbDate } });
+      setMessage(JSON.stringify(res.data, null, 2));
+    } catch (e) {
+      setMessage('db/snapshot 실패: ' + e.message);
+    } finally { setLoading(false); }
+  };
+  const testDbNextTradingDay = async () => {
+    setLoading(true);
+    setMessage('db/next-trading-day 테스트 중...');
+    try {
+      const res = await axiosInstance.get('/db/next-trading-day', { params: { date: dbDate } });
+      setMessage(JSON.stringify(res.data, null, 2));
+    } catch (e) {
+      setMessage('db/next-trading-day 실패: ' + e.message);
+    } finally { setLoading(false); }
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6">
       <div className="max-w-4xl mx-auto">
@@ -195,7 +239,7 @@ const RedisTest = () => {
           <div className="bg-slate-800 p-6 rounded-lg">
             <h2 className="text-xl font-semibold mb-4">스케줄러 관리</h2>
             <p className="text-gray-400 mb-4">
-              분당 50+@ 수준으로 갱신하도록 배치/지연을 조절해 테스트할 수 있습니다.
+              분당 배치/지연을 조절해 테스트할 수 있습니다.
             </p>
             <div className="flex gap-2 flex-wrap">
               <button
@@ -332,6 +376,14 @@ const RedisTest = () => {
             <button onClick={testQuote} className="px-3 py-2 bg-blue-600 rounded hover:bg-blue-500">/market/quote</button>
             <button onClick={testRedisStocks} className="px-3 py-2 bg-indigo-600 rounded hover:bg-indigo-500">/redis/stocks</button>
             <button onClick={testRedisStock} className="px-3 py-2 bg-emerald-600 rounded hover:bg-emerald-500">/redis/stock/{'{' }symbol{ '}'}</button>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center mb-3">
+            <input type="number" value={dbDays} onChange={e=>setDbDays(Number(e.target.value||7))} className="px-3 py-2 bg-slate-900 rounded w-28" placeholder="days" />
+            <input type="date" value={dbDate} onChange={e=>setDbDate(e.target.value)} className="px-3 py-2 bg-slate-900 rounded" />
+            <button onClick={testDbCandles} className="px-3 py-2 bg-purple-600 rounded hover:bg-purple-500">/db/candles</button>
+            <button onClick={testDbLastRange} className="px-3 py-2 bg-fuchsia-600 rounded hover:bg-fuchsia-500">/db/last-range</button>
+            <button onClick={testDbSnapshot} className="px-3 py-2 bg-amber-600 rounded hover:bg-amber-500">/db/snapshot</button>
+            <button onClick={testDbNextTradingDay} className="px-3 py-2 bg-teal-600 rounded hover:bg-teal-500">/db/next-trading-day</button>
           </div>
           <p className="text-xs text-gray-400">테스트 응답은 상단 "결과" 영역에 표시됩니다.</p>
         </div>
