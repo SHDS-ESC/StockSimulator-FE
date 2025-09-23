@@ -12,13 +12,14 @@ import {
   Menu,
   X,
   Settings,
+  CalendarDays,
 } from "lucide-react";
 import useDateStore from "@/store/useDateStore";
 import { Button } from "../ui/button";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 // Header 컴포넌트
-export const Header = () => {
+export const Header = ({onClick}) => {
   const { currentDate, goNextTurn } = useDateStore();
   const { lastProfileId } = useLoginStore();
   console.log("현재 날짜" + currentDate);
@@ -35,30 +36,32 @@ export const Header = () => {
     setIsMenuOpen(false);
   };
 
-  const handleNextButtonClick = async () => {
-    const currentDateObj = new Date(currentDate);
-    currentDateObj.setDate(currentDateObj.getDate() + 1);
-    const updateDate = goNextTurn(currentDateObj);
-    try {
-      await axiosInstance.post(
-        "/userprofile/update/process-date",
-        {
-          userProfileId: lastProfileId,
-          processDate: updateDate,
-        },
-        { withCredentials: true }
-      );
-    } catch (e) {
-      console.log(e);
-      /* ignore */
-    } finally {
-      console.log("업데이트 날짜" + updateDate);
-    }
-  };
+
+const handleNextButtonClick = async () => {
+  const currentDateObj = new Date(currentDate);
+  currentDateObj.setDate(currentDateObj.getDate() + 1);
+  
+  // goNextTurn 사용하여 날짜 업데이트 (기존 로직 유지)
+  const updateDate = goNextTurn(currentDateObj);
+  
+  try {
+    await axiosInstance.post(
+      "/userprofile/update/process-date",
+      {
+        userProfileId: lastProfileId,
+        processDate: updateDate,
+      },
+      { withCredentials: true }
+    );
+    console.log("턴 종료 - 업데이트 날짜:", updateDate);
+  } catch (e) {
+    console.log(e);
+  }
+};
 
   return (
-    <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-      <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
+    <div   className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
+      <div  className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
         {/* 왼쪽 */}
         <div className="flex justify-start">
           <button
@@ -71,7 +74,14 @@ export const Header = () => {
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
+          <button
+            onClick={onClick}
+            className="text-white w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"
+          >
+            <CalendarDays className=""/>
+          </button>
         </div>
+        
 
         {/* 가운데 - 자동으로 완전 중앙 */}
         <h1

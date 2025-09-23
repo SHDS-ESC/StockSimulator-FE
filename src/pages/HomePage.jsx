@@ -32,7 +32,7 @@ const HomePage = () => {
     state: true,
     change: 0,
     changeAmount: 0,
-    seedMoney :0
+    seedMoney: 0,
   });
 
   // 실시간 주식 데이터 훅 사용
@@ -285,7 +285,7 @@ const HomePage = () => {
   // };
 
   return (
-    <div className="h-full pt-10 pb-10">
+    <div className="h-full pt-5 pb-10">
       {/* 상단 로그인/로그아웃 액션 (상태에 따라 토글) */}
       <div className="px-4 mb-3 flex gap-2">
         {sessionStorage.getItem("accessToken") ? (
@@ -329,15 +329,18 @@ const HomePage = () => {
               const totalCurrent =
                 selectedProfile.cashBalance + selectedProfile.totalInvested;
               const totalInitial = selectedProfile.seedMoney;
+              const diffPrice = (totalCurrent - totalInitial).toFixed(3);
               const diffPercent = (
                 ((totalCurrent - totalInitial) / totalInitial) *
                 100
-              ).toFixed(10);
+              ).toFixed(3);
               return (
                 <p
-                  className={`text-xs ${diffPercent >= 0 ? "text-red-500" : "text-blue-400"}`}
+                  className={`text-xs ${diffPrice > 0 ? "text-red-500" : "text-blue-400"}`}
                 >
-                  {diffPercent >= 0 ? `+${diffPercent}%` : `${diffPercent}%`}
+                  {diffPrice > 0 ? "+" : ""}
+                  {diffPercent}% ({diffPrice > 0 ? "+" : ""}
+                  {diffPrice}$)
                 </p>
               );
             })()}
@@ -346,9 +349,31 @@ const HomePage = () => {
         {/* 투자/현금 정보 */}
         <div className="flex justify-between mb-4">
           <div>
-            <p className="text-gray-400 text-xs mb-1">투자</p>
+            <p className="text-gray-400 text-xs mb-1">투자 </p>
+
             <p className="text-white text-lg font-semibold">
               $ {selectedProfile?.totalInvested}
+            </p>
+            <p
+              className={`text-xs ${
+                selectedProfile.totalInvested - startInvested >= 0
+                  ? "text-red-500"
+                  : "text-blue-400"
+              }`}
+            >
+              {((selectedProfile.totalInvested - startInvested) /
+                startInvested) *
+                100 >
+              0
+                ? "+"
+                : ""}
+              {(
+                ((selectedProfile.totalInvested - startInvested) /
+                  startInvested) *
+                100
+              ).toFixed(2)}
+              % ({selectedProfile.totalInvested - startInvested > 0 ? "+" : ""}
+              {(selectedProfile.totalInvested - startInvested).toFixed(2)}$ )
             </p>
           </div>
           <div>
@@ -371,45 +396,47 @@ const HomePage = () => {
         <div className="bg-slate-800 rounded-xl p-3">
           <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
           <div className="space-y-2">
-            {holdingStocks.map((stock, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                    {/* 이미지 */}
-                    <img
-                      src={stock.logo}
-                      alt={stock.name}
-                      className="w-full h-full object-cover"
-                    />
-                    {/* */}
-                    <span className="text-gray-600 font-bold text-xs hidden">
-                      {stock.ticker}
-                    </span>
+            {holdingStocks
+              .filter((stock) => stock.quantity && stock.quantity > 0)
+              .map((stock, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                      <img
+                        src={stock.logo}
+                        alt={stock.name}
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="text-gray-600 font-bold text-xs hidden">
+                        {stock.ticker}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-medium text-sm">
+                        {stock.name}
+                      </h4>
+                      <p className="text-gray-400 text-xs">{stock.ticker}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">
-                      {stock.name}
-                    </h4>
-                    <p className="text-gray-400 text-xs">{stock.ticker}</p>
-                  </div>
-                </div>
-                <div className="text-right">
                   <div className="text-right">
                     <p className="text-white font-semibold text-[10px] mb-2">
                       {stock.quantity}주
                     </p>
+                    <p className="text-white font-semibold text-sm">
+                      ${stock.price}
+                    </p>
+                    <p
+                      className={`text-xs ${
+                        stock.change > 0 ? "text-red-500" : "text-blue-400"
+                      }`}
+                    >
+                      {stock.change > 0 ? "+" : ""}
+                      {stock.change}% ({stock.changeAmount > 0 ? "+" : ""}$
+                      {stock.changeAmount})
+                    </p>
                   </div>
-                  <p className="text-white font-semibold text-sm">
-                    $ {stock.price}
-                  </p>
-                  <p
-                    className={`text-xs ${stock.change > 0 ? "text-red-500" : "text-blue-400"}`}
-                  >
-                    ${stock.changeAmount} ({stock.change})%
-                  </p>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       </div>
