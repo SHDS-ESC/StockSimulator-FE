@@ -84,7 +84,20 @@ const HomePage = () => {
   const [histTop, setHistTop] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
   const [histError, setHistError] = useState(null);
-  const [histCache, setHistCache] = useState({}); // 날짜별 캐시
+  const [histCache, setHistCache] = useState({}); // 날짜별 캐시: { [dateKey]: { rising:[], falling:[], volume:[] } }
+
+  // TOP3 탭 상태 (상승률/하락률/거래량)
+  const [topFilter, setTopFilter] = useState("rising"); // 'rising' | 'falling' | 'volume'
+
+  // 거래량 축약 표시
+  const formatVolume = (val) => {
+    const n = parseFloat(String(val ?? "").replace(/[^0-9.-]/g, ""));
+    if (!Number.isFinite(n)) return "-";
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return String(Math.round(n));
+  };
 
   useEffect(() => {
     if (!isHistorical || !dateKey) {
@@ -94,27 +107,32 @@ const HomePage = () => {
       return;
     }
 
-    if (histCache[dateKey]) {
-      setHistTop(histCache[dateKey]);
+    const cachedForDate = histCache[dateKey] || {};
+    if (cachedForDate[topFilter]) {
+      setHistTop(cachedForDate[topFilter]);
       setHistLoading(false);
       return;
     }
+
+    const sortParam = topFilter === "rising"
+      ? "changePercent,desc"
+      : topFilter === "falling"
+      ? "changePercent,asc"
+      : "volume,desc";
 
     const run = async () => {
       setHistLoading(true);
       setHistError(null);
       try {
         const resp = await axiosInstance.get("/db/snapshot", {
-          params: {
-            date: dateKey,
-            page: 1,
-            size: 3,
-            sort: "changePercent,desc",
-          },
+          params: { date: dateKey, page: 1, size: 3, sort: sortParam },
         });
         const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
         setHistTop(rows);
-        setHistCache((prev) => ({ ...prev, [dateKey]: rows }));
+        setHistCache((prev) => ({
+          ...prev,
+          [dateKey]: { ...(prev[dateKey] || {}), [topFilter]: rows },
+        }));
       } catch (_) {
         setHistTop([]);
         setHistError("과거 데이터 계산 실패");
@@ -123,7 +141,7 @@ const HomePage = () => {
       }
     };
     run();
-  }, [isHistorical, dateKey, histCache]);
+  }, [isHistorical, dateKey, topFilter, histCache]);
 
   useConfirmLogin(null);
   // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
@@ -251,6 +269,61 @@ const HomePage = () => {
       .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
       .slice(0, 3);
   }, [stocks]);
+
+  // 하락률 상위(절대값 기준 하락 큰 것) 3개
+  const topFallingStocks = useMemo(() => {
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(
+        String(val || "")
+          .replace("%", "")
+          .replace("+", "")
+      );
+      return Number.isFinite(n) ? n : Infinity;
+    };
+    return stocks
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+      }))
+      .filter((s) => s.changePercent && toPct(s.changePercent) !== Infinity)
+      .sort((a, b) => toPct(a.changePercent) - toPct(b.changePercent))
+      .slice(0, 3);
+  }, [stocks]);
+
+  // 거래량 상위 3개
+  const topVolumeStocks = useMemo(() => {
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toNum = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    return stocks
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+        volume: String(s?.volume ?? "0"),
+      }))
+      .sort((a, b) => toNum(b.volume) - toNum(a.volume))
+      .slice(0, 3);
+  }, [stocks]);
+
+  // 실시간 모드에서 선택된 TOP3 리스트
+  const selectedRtList = useMemo(() => {
+    switch (topFilter) {
+      case "falling":
+        return topFallingStocks;
+      case "volume":
+        return topVolumeStocks;
+      case "rising":
+      default:
+        return topRisingStocks;
+    }
+  }, [topFilter, topRisingStocks, topFallingStocks, topVolumeStocks]);
 
   const handleCreateProfile = () => {
     // Character 페이지로 이동
@@ -441,12 +514,46 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* 실시간 급상승 종목 섹션 */}
+      {/* 실시간/과거 TOP3 섹션 (상승/하락/거래량 탭) */}
       <div className="bg-slate-950 px-4 py-2">
         <div className="bg-slate-800 rounded-xl p-3">
-          <h3 className="text-white text-lg font-semibold mb-3">
-            실시간 급상승 종목
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white text-lg font-semibold">
+              {topFilter === "rising" ? "상승률 TOP3" : topFilter === "falling" ? "하락률 TOP3" : "거래량 TOP3"}
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTopFilter("rising")}
+                className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  topFilter === "rising"
+                    ? "bg-red-500 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+              >
+                상승률
+              </button>
+              <button
+                onClick={() => setTopFilter("falling")}
+                className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  topFilter === "falling"
+                    ? "bg-red-500 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+              >
+                하락률
+              </button>
+              <button
+                onClick={() => setTopFilter("volume")}
+                className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  topFilter === "volume"
+                    ? "bg-red-500 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+              >
+                거래량
+              </button>
+            </div>
+          </div>
           {(isHistorical ? histLoading : stocksLoading) ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
@@ -475,7 +582,7 @@ const HomePage = () => {
               </p>
             </div>
           ) : (
-              isHistorical ? histTop.length === 0 : topRisingStocks.length === 0
+              isHistorical ? histTop.length === 0 : selectedRtList.length === 0
             ) ? (
             <div className="text-center py-4">
               <p className="text-gray-400 text-sm">
@@ -486,11 +593,12 @@ const HomePage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {(isHistorical ? histTop : topRisingStocks).map(
+              {(isHistorical ? histTop : selectedRtList).map(
                 (stock, index) => (
                   <div
                     key={`trending-${stock.symbol}-${index}`}
-                    className="flex items-center justify-between"
+                    className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
+                    onClick={() => navigate(`/stocks/${encodeURIComponent(String(stock.symbol || ""))}`)}
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
@@ -539,6 +647,11 @@ const HomePage = () => {
                         >
                           ({String(stock.changePercent)})
                         </p>
+                        {topFilter === "volume" && (
+                          <p className="text-xs text-gray-400 ml-1">
+                            거래량: {formatVolume(stock.volume)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
