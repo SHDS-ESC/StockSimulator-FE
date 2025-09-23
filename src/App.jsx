@@ -150,7 +150,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, setCurrentDate } = useDateStore();
+  const { isTurnOver, currentDate, setCurrentDate, skipNotice } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
@@ -162,7 +162,7 @@ function App() {
     try {
       // 1. 먼저 전역 상태 업데이트
       setCurrentDate(selectedDate);
-      
+
       // 2. 백엔드에 날짜 업데이트 요청
       if (lastProfileId) {
         // Date 객체를 YYYY-MM-DD 형식 문자열로 변환
@@ -174,7 +174,7 @@ function App() {
         };
 
         const formattedDate = formatDateForBackend(selectedDate);
-        
+
         await axiosInstance.post(
           "/userprofile/update/process-date",
           {
@@ -185,10 +185,10 @@ function App() {
         );
         console.log("날짜 업데이트 완료:", formattedDate);
       }
-      
+
       // 3. 캘린더 모달 닫기
       setIsCalendarOpen(false);
-      
+
     } catch (error) {
       console.error("날짜 업데이트 실패:", error);
       // 에러 발생 시 사용자에게 알림
@@ -349,6 +349,17 @@ function App() {
               >
                 닫기
               </button>
+            </div>
+          </div>
+        )}
+        {/* 휴장일 스킵 토스트 */}
+        {skipNotice && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50">
+            <div className="bg-blue-900 text-blue-100 border border-blue-500/40 rounded-lg px-4 py-2 text-xs shadow-lg">
+              <span>{skipNotice.from}</span>
+              <span className="mx-1">→</span>
+              <span>{skipNotice.to}</span>
+              <span className="ml-2">휴장일로 {skipNotice.skipped}일 SKIP</span>
             </div>
           </div>
         )}

@@ -7,6 +7,7 @@ const useDateStore = create(
       // 초기 상태
       currentDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD 형식
       isTurnOver: false,
+      skipNotice: null, // { from, to, skipped }
 
       // 오늘 날짜로 초기화
       initToday: (currentDate) =>
@@ -46,10 +47,15 @@ const useDateStore = create(
         });
       },
 
+      // 휴장일 스킵 알림 표시/해제
+      showSkipNotice: (info) => set({ skipNotice: info }),
+      clearSkipNotice: () => set({ skipNotice: null }),
+
       // 현재 상태 초기화
       reset: () =>
         set({
           currentDate: new Date().toISOString().split("T")[0],
+          skipNotice: null,
         }),
     }),
     {
