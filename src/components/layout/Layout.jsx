@@ -12,15 +12,15 @@ import {
   Menu,
   X,
   Settings,
+  CalendarDays,
 } from "lucide-react";
 import useDateStore from "@/store/useDateStore";
 import { Button } from "../ui/button";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
-// 프론트 폴백 제거: 백엔드 메타(API)만 사용
 // Header 컴포넌트
-export const Header = () => {
-  const { currentDate, setCurrentDate, showSkipNotice, clearSkipNotice } = useDateStore();
+export const Header = ({onClick}) => {
+  const { currentDate, goNextTurn, setCurrentDate, showSkipNotice, clearSkipNotice } = useDateStore();
   const { lastProfileId } = useLoginStore();
   console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -36,72 +36,79 @@ export const Header = () => {
     setIsMenuOpen(false);
   };
 
-  const handleNextButtonClick = async () => {
-    // 다음 날로 이동 후, 휴장일이면 유효 거래일로 스냅
-    const nextDateObj = new Date(currentDate);
-    nextDateObj.setDate(nextDateObj.getDate() + 1);
-    const nextKey = nextDateObj.toISOString().split("T")[0];
-    let effectiveKey = nextKey;
-    try {
-      // 백엔드에서 다음 유효 거래일 메타 제공: /api/db/next-trading-day
-      const r = await axiosInstance.get(`/db/next-trading-day`, { params: { date: nextKey, max: 30 } });
-      const eff = String(r?.data?.effectiveDate || '') || null;
-      const result = eff ? { effectiveDate: eff, skipped: Number(r?.data?.skippedDays || 0), reachedLimit: false } : { effectiveDate: nextKey, skipped: 0, reachedLimit: false };
-      if (!result.reachedLimit && result.effectiveDate) {
-        effectiveKey = result.effectiveDate;
-        if (effectiveKey !== nextKey) {
-          showSkipNotice({ from: nextKey, to: effectiveKey, skipped: result.skipped });
-          setTimeout(() => clearSkipNotice(), 2500);
+
+const handleNextButtonClick = async () => {
+  const currentDateObj = new Date(currentDate);
+  currentDateObj.setDate(currentDateObj.getDate() + 1);
+
+  // goNextTurn 사용하여 날짜 업데이트 (기존 로직 유지)
+  // const updateDate = goNextTurn(currentDateObj);
+  const nextKey = currentDateObj.toISOString().split("T")[0];
+  let effectiveKey = nextKey;
+
+  try {
+        // 백엔드에서 다음 유효 거래일 메타 제공: /api/db/next-trading-day
+        const r = await axiosInstance.get(`/db/next-trading-day`, { params: { date: nextKey, max: 30 } });
+        const eff = String(r?.data?.effectiveDate || '') || null;
+        const result = eff ? { effectiveDate: eff, skipped: Number(r?.data?.skippedDays || 0), reachedLimit: false } : { effectiveDate: nextKey, skipped: 0, reachedLimit: false };
+        if (!result.reachedLimit && result.effectiveDate) {
+            effectiveKey = result.effectiveDate;
+            if (effectiveKey !== nextKey) {
+                showSkipNotice({ from: nextKey, to: effectiveKey, skipped: result.skipped });
+                setTimeout(() => clearSkipNotice(), 2500);
+            }
         }
-      }
     } catch (_) {
-      // ignore, fall back to nextKey
+        // ignore, fall back to nextKey
     }
     setCurrentDate(effectiveKey);
     // 턴 종료 팝업 트리거
     useDateStore.setState({ isTurnOver: true });
-    try {
-      await axiosInstance.post(
-        "/userprofile/update/process-date",
-        {
-          userProfileId: lastProfileId,
-          processDate: effectiveKey,
-        },
+
+  try {
+    await axiosInstance.post(
+      "/userprofile/update/process-date",
+      {
+        userProfileId: lastProfileId,
+        // processDate: updateDate,
+           processDate: effectiveKey,
+      },
         { withCredentials: true }
-      );
-    } catch (e) {
+    );
+  } catch (e) {
       console.log(e);
       /* ignore */
-    } finally {
+  } finally {
       console.log("업데이트 날짜" + effectiveKey);
-    }
-  };
+  }
+};
 
-  // 마운트 시 현재 날짜가 휴장일이면 유효 거래일로 스냅
-  useEffect(() => {
-    let active = true;
-    const snap = async () => {
-      if (!lastProfileId) return;
-      try {
-        // 서버 메타 호출만 사용
-        const r = await axiosInstance.get(`/db/next-trading-day`, { params: { date: currentDate, max: 30 } });
-        const eff = String(r?.data?.effectiveDate || '') || null;
-        const result = eff ? { effectiveDate: eff, skipped: Number(r?.data?.skippedDays || 0), reachedLimit: false } : { effectiveDate: currentDate, skipped: 0, reachedLimit: false };
-        if (!active) return;
-        if (!result.reachedLimit && result.effectiveDate && result.effectiveDate !== currentDate) {
-          setCurrentDate(result.effectiveDate);
-        }
-      } catch (_) {
-        // ignore
-      }
-    };
-    snap();
-    return () => { active = false; };
-  }, [lastProfileId]);
+
+    // 마운트 시 현재 날짜가 휴장일이면 유효 거래일로 스냅
+    useEffect(() => {
+        let active = true;
+        const snap = async () => {
+            if (!lastProfileId) return;
+            try {
+                // 서버 메타 호출만 사용
+                const r = await axiosInstance.get(`/db/next-trading-day`, { params: { date: currentDate, max: 30 } });
+                const eff = String(r?.data?.effectiveDate || '') || null;
+                const result = eff ? { effectiveDate: eff, skipped: Number(r?.data?.skippedDays || 0), reachedLimit: false } : { effectiveDate: currentDate, skipped: 0, reachedLimit: false };
+                if (!active) return;
+                if (!result.reachedLimit && result.effectiveDate && result.effectiveDate !== currentDate) {
+                    setCurrentDate(result.effectiveDate);
+                }
+            } catch (_) {
+                // ignore
+            }
+        };
+        snap();
+        return () => { active = false; };
+    }, [lastProfileId]);
 
   return (
-    <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-      <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
+    <div   className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
+      <div  className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
         {/* 왼쪽 */}
         <div className="flex justify-start">
           <button
@@ -114,7 +121,14 @@ export const Header = () => {
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
+          <button
+            onClick={onClick}
+            className="text-white w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"
+          >
+            <CalendarDays className=""/>
+          </button>
         </div>
+
 
         {/* 가운데 - 자동으로 완전 중앙 */}
         <h1
