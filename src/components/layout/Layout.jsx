@@ -79,24 +79,9 @@ export const Header = ({onClick}) => {
 
         setPortfolioList(responseData); // store에 저장
         goNextTurn(currentDateObj);
-    };
+      };
 
-
-    try {
-        await axiosInstance.post(
-            "/userprofile/update/process-date",
-            {
-                userProfileId: lastProfileId,
-                processDate: updateDate,
-            },
-            {withCredentials: true}
-        );
-        console.log("턴 종료 - 업데이트 날짜:", updateDate);
-    } catch (e) {
-        console.log(e);
-    }
-};
-
+      
 function getRandomColor() {
     return (
         "#" +
