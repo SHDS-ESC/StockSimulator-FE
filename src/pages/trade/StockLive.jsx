@@ -169,7 +169,7 @@ export default function StockLive() {
     async function fetchRealtime() {
       if (!s || isHistorical) return;
       try {
-        const res = await axios.get(`/market/redis/stock/${s}`);
+        const res = await axios.get(`/redis/stock/${s}`);
         const data = res?.data;
         if (!data) {
           setErr("데이터 없음");
@@ -209,7 +209,7 @@ export default function StockLive() {
     }
     const fetchFromRedis = async () => {
       try {
-        const res = await axiosInstance.get(`/market/redis/stock/${s}`);
+        const res = await axiosInstance.get(`/redis/stock/${s}`);
         const data = res?.data;
         if (!data) {
           setErr("데이터 없음");
