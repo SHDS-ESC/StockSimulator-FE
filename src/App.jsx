@@ -6,7 +6,6 @@ import News from "./pages/News";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyPage from "./pages/Mypage";
-import Main from "./pages/Main";
 import { Header, Footer } from "./components/layout/Layout";
 import AnimatedBackground from "./components/AnimatedBackground";
 import "./index.css";
@@ -16,7 +15,6 @@ import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
 import useDateStore from "@/store/useDateStore";
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import * as echarts from "echarts";
 import axiosInstance from "./util/axiosInstance";
 // CalendarForm 관련 imports
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,6 +41,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import useLoginStore from "./store/useLoginStore";
+import useChartStore from "./store/useChartStore";
 
 const FormSchema = z.object({
   selectedDate: z.date({
@@ -74,14 +73,14 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
-      <div className="bg-white p-6 rounded-lg shadow-lg w-[90%] max-w-md">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-white ps-6 pe-6 pb-6 pt-4 rounded-lg shadow-lg w-[40%] max-w-md">
+        <div class="flex justify-between items-center mt-0 mb-0">
           <h3 className="text-lg font-semibold">날짜 선택</h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-500 hover:text-gray-700 flex justify-between items-start"
           >
             ✕
           </Button>
@@ -150,45 +149,32 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, setCurrentDate } = useDateStore();
+  const { isTurnOver, currentDate, goNextTurn } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
-
   const toggleCalendar = () => setIsCalendarOpen((prev) => !prev);
+  const { portfolioList, setPortfolioList, initChart } = useChartStore();
 
-  // 날짜 업데이트 로직을 단일화
- const handleDateChange = async (selectedDate) => {
+  const handleDateChange = async (selectedDate) => {
     try {
-      // 1. 먼저 전역 상태 업데이트
-      setCurrentDate(selectedDate);
-      
-      // 2. 백엔드에 날짜 업데이트 요청
-      if (lastProfileId) {
-        // Date 객체를 YYYY-MM-DD 형식 문자열로 변환
-        const formatDateForBackend = (date) => {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          return `${year}-${month}-${day}`;
-        };
+      const response = await axiosInstance.post(
+        "/userprofile/update/process-date",
+        {
+          userProfileId: lastProfileId,
+          processDate: format(selectedDate, "yyyy-MM-dd"),
+        }
+      );
 
-        const formattedDate = formatDateForBackend(selectedDate);
-        
-        await axiosInstance.post(
-          "/userprofile/update/process-date",
-          {
-            userProfileId: lastProfileId,
-            processDate: formattedDate,
-          },
-          { withCredentials: true }
-        );
-        console.log("날짜 업데이트 완료:", formattedDate);
-      }
-      
-      // 3. 캘린더 모달 닫기
+      const responseData = response.data.holdingsDTOList.map((holdings) => ({
+        value: holdings.price,
+        name: holdings.ticker,
+        itemStyle: { color: getRandomColor() },
+      }));
+
+      setPortfolioList(responseData); // store에 저장
+      goNextTurn(selectedDate);
       setIsCalendarOpen(false);
-      
     } catch (error) {
       console.error("날짜 업데이트 실패:", error);
       // 에러 발생 시 사용자에게 알림
@@ -197,106 +183,31 @@ function App() {
       });
     }
   };
+
+  // 차트 초기화
+  useEffect(() => {
+    const cleanup = initChart(chartRef);
+    return cleanup;
+  }, [portfolioList]); // portfolioList 바뀌면 업데이트
+
   const handleCloseCalendar = () => {
     setIsCalendarOpen(false);
   };
 
-  // ECharts 파이 차트 초기화
-  const initChart = useCallback(() => {
-    if (chartRef.current) {
-      const myChart = echarts.init(chartRef.current);
-      const option = {
-        title: {
-          text: "포트폴리오",
-          left: "center",
-          top: "10px",
-          textStyle: {
-            color: "#ffffff",
-            fontSize: 16,
-          },
-          subtextStyle: {
-            color: "#9ca3af",
-            fontSize: 12,
-          },
-        },
-        tooltip: {
-          trigger: "item",
-          formatter: "{a} <br/>{b}: {c} ({d}%)",
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          borderColor: "#374151",
-          textStyle: {
-            color: "#ffffff",
-          },
-        },
-        legend: {
-          orient: "horizontal",
-          bottom: "10px",
-          left: "center",
-          textStyle: {
-            color: "#ffffff",
-            fontSize: 11,
-          },
-          itemWidth: 12,
-          itemHeight: 8,
-        },
-        series: [
-          {
-            name: "보유 종목",
-            type: "pie",
-            radius: ["30%", "60%"],
-            center: ["50%", "45%"],
-            avoidLabelOverlap: false,
-            label: {
-              show: false,
-              position: "center",
-            },
-            emphasis: {
-              label: {
-                show: true,
-                fontSize: 14,
-                fontWeight: "bold",
-                color: "#ffffff",
-              },
-              itemStyle: {
-                shadowBlur: 10,
-                shadowOffsetX: 0,
-                shadowColor: "rgba(0, 0, 0, 0.5)",
-              },
-            },
-            labelLine: {
-              show: false,
-            },
-            data: [
-              { value: 248, name: "AAPL", itemStyle: { color: "#ff6384" } },
-              { value: 735, name: "GOOGL", itemStyle: { color: "#36a2eb" } },
-              { value: 580, name: "TSLA", itemStyle: { color: "#ffce56" } },
-              { value: 484, name: "NVDA", itemStyle: { color: "#4bc0c0" } },
-              { value: 300, name: "NFLX", itemStyle: { color: "#9966ff" } },
-            ],
-          },
-        ],
-      };
-      myChart.setOption(option);
-
-      // 리사이즈 이벤트 리스너 추가
-      const handleResize = () => {
-        myChart.resize();
-      };
-      window.addEventListener("resize", handleResize);
-
-      // 컴포넌트 언마운트 시 차트 정리
-      return () => {
-        window.removeEventListener("resize", handleResize);
-        myChart.dispose();
-      };
-    }
-  }, []);
+  function getRandomColor() {
+    return (
+      "#" +
+      Math.floor(Math.random() * 16777215)
+        .toString(16)
+        .padStart(6, "0")
+    );
+  }
 
   // 차트 초기화
   useEffect(() => {
     const cleanup = initChart();
     return cleanup;
-  }, [initChart, isTurnOver]);
+  }, [initChart, isTurnOver, portfolioList]);
 
   return (
     <div className="min-h-screen flex flex-col items-center relative">
