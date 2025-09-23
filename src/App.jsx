@@ -17,7 +17,7 @@ import Chat from "./pages/Chat";
 import useDateStore from "@/store/useDateStore";
 
 function App() {
-  const { isTurnOver } = useDateStore();
+  const { isTurnOver, skipNotice } = useDateStore();
 
   return (
     <div className="min-h-screen flex flex-col items-center relative">
@@ -54,6 +54,17 @@ function App() {
               >
                 닫기
               </button>
+            </div>
+          </div>
+        )}
+        {/* 휴장일 스킵 토스트 */}
+        {skipNotice && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50">
+            <div className="bg-blue-900 text-blue-100 border border-blue-500/40 rounded-lg px-4 py-2 text-xs shadow-lg">
+              <span>{skipNotice.from}</span>
+              <span className="mx-1">→</span>
+              <span>{skipNotice.to}</span>
+              <span className="ml-2">휴장일로 {skipNotice.skipped}일 SKIP</span>
             </div>
           </div>
         )}

@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import useLoginStore from "@/store/useLoginStore";
 import axiosInstance from "@/util/axiosInstance";
-import PredictionChartModal from "../components/PredictionChartModal";
 
 // 툴팁 컴포넌트
 const Tooltip = ({ children, content }) => {
@@ -115,8 +114,6 @@ const Chat = () => {
     error: null
   });
 
-  // 모달 상태 관리
-  const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // API 호출 함수
   const handleSimulationSubmit = async () => {
@@ -663,7 +660,7 @@ const Chat = () => {
                         <div className="bg-slate-700 rounded-lg p-3">
                           <div className="text-xs text-gray-400 mb-3">예측 차트</div>
                           <button
-                            onClick={() => setIsChartModalOpen(true)}
+                            onClick={() => { /* 모달 제거됨 */ }}
                             className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white py-3 px-4 rounded-lg font-medium text-sm transition-all duration-200 flex items-center justify-center space-x-2"
                           >
                             <LineChart className="w-4 h-4" />
@@ -739,19 +736,7 @@ const Chat = () => {
         </div>
       </div>
 
-      {/* 예측 차트 모달 */}
-      <PredictionChartModal
-        isOpen={isChartModalOpen}
-        onClose={() => setIsChartModalOpen(false)}
-        ticker={simulation.ticker}
-        baseDate={simulation.today}
-        lastPrice={simulation.result?.last_price}
-        predictionData={{
-          dates: simulation.result?.prediction_dates || [],
-          prices: simulation.result?.price_predictions || [],
-          returns: simulation.result?.return_predictions || []
-        }}
-      />
+      {/* 예측 차트 모달 제거됨 */}
     </div>
   );
 };
