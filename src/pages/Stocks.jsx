@@ -16,8 +16,8 @@ const Stocks = () => {
    const [stocksPerPage] = useState(6); // 페이지당 6개 주식 표시
 
 	// 로그인 상태 및 프로필 정보
-	const { lastProfileId } = useLoginStore();
-	const { currentDate } = useDateStore();
+    const { lastProfileId } = useLoginStore();
+    const { currentDate } = useDateStore();
 	const profile = useMemo(() => {
 		try { return JSON.parse(localStorage.getItem("newProfile") || "null"); } catch (_) { return null; }
 	}, [lastProfileId]);
@@ -256,10 +256,17 @@ const Stocks = () => {
                 const resp = await axios.get('/db/snapshot', { params: { date: dateKey, page: reqPage, size: reqSize, sort } });
                 const arr = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
                 const total = Number(resp?.data?.total || 0);
+                const effectiveDate = String(resp?.data?.effectiveDate || '') || null;
+                if (!searchActive && effectiveDate && effectiveDate !== dateKey) {
+                    showSkipNotice({ from: dateKey, to: effectiveDate, skipped: Number(resp?.data?.skippedDays || 0) });
+                    setTimeout(() => clearSkipNotice(), 2500);
+                    setCurrentDate(effectiveDate);
+                    return; // 날짜 업데이트 후 재요청
+                }
                 const projection = { __rows: arr, __total: total };
                 setHistMap(projection);
             } catch (_) {
-                // 폴백: 기존 방식 유지
+            
             }
         };
         doFetch();

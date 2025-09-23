@@ -21,7 +21,7 @@ export default function StockLive() {
   const [price, setPrice] = useState(null);
   const [prevClose, setPrevClose] = useState(null);
   const [err, setErr] = useState(null);
-  const { currentDate } = useDateStore();
+  const { currentDate, setCurrentDate, showSkipNotice, clearSkipNotice } = useDateStore();
   const { lastProfileId } = useLoginStore();
   const [quantity, setQuantity] = useState(0);
   const [trade, setTrade] = useState("");
@@ -132,9 +132,20 @@ export default function StockLive() {
       try {
         const resp = await axios.get("/db/snapshot", { params: { date: dateKey, symbols: s, page: 1, size: 1 } });
         const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+        const effectiveDate = String(resp?.data?.effectiveDate || '') || null;
+        if (effectiveDate && effectiveDate !== dateKey) {
+          showSkipNotice({ from: dateKey, to: effectiveDate, skipped: Number(resp?.data?.skippedDays || 0) });
+          setTimeout(() => clearSkipNotice(), 2500);
+          setCurrentDate(effectiveDate);
+          return;
+        }
         const row = rows.find((r) => String(r?.symbol || "").toUpperCase() === s) || rows[0];
         if (!row) {
           if (!active) return;
+          setPrice(null);
+          setPrevClose(null);
+          setErr("스냅샷 데이터 없음");
+          return;
           setPrice(null);
           setPrevClose(null);
           setErr("스냅샷 데이터 없음");
@@ -158,7 +169,7 @@ export default function StockLive() {
     async function fetchRealtime() {
       if (!s || isHistorical) return;
       try {
-        const res = await axios.get(`/market/redis/stock/${s}`);
+        const res = await axios.get(`/redis/stock/${s}`);
         const data = res?.data;
         if (!data) {
           setErr("데이터 없음");
@@ -198,7 +209,7 @@ export default function StockLive() {
     }
     const fetchFromRedis = async () => {
       try {
-        const res = await axiosInstance.get(`/market/redis/stock/${s}`);
+        const res = await axiosInstance.get(`/redis/stock/${s}`);
         const data = res?.data;
         if (!data) {
           setErr("데이터 없음");

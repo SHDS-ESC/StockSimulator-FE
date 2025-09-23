@@ -149,7 +149,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, goNextTurn } = useDateStore();
+  const { isTurnOver, currentDate, setCurrentDate, skipNotice ,goNextTurn } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
@@ -175,6 +175,7 @@ function App() {
       setPortfolioList(responseData); // store에 저장
       goNextTurn(selectedDate);
       setIsCalendarOpen(false);
+
     } catch (error) {
       console.error("날짜 업데이트 실패:", error);
       // 에러 발생 시 사용자에게 알림
@@ -260,6 +261,17 @@ function App() {
               >
                 닫기
               </button>
+            </div>
+          </div>
+        )}
+        {/* 휴장일 스킵 토스트 */}
+        {skipNotice && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50">
+            <div className="bg-blue-900 text-blue-100 border border-blue-500/40 rounded-lg px-4 py-2 text-xs shadow-lg">
+              <span>{skipNotice.from}</span>
+              <span className="mx-1">→</span>
+              <span>{skipNotice.to}</span>
+              <span className="ml-2">휴장일로 {skipNotice.skipped}일 SKIP</span>
             </div>
           </div>
         )}

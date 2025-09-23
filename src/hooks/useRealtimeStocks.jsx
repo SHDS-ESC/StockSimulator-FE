@@ -34,7 +34,7 @@ const useRealtimeStocks = (options = {}) => {
   // Redis에서 개별 주식 데이터 가져오기
   const fetchStockFromRedis = useCallback(async (ticker) => {
     try {
-      const response = await axiosInstance.get(`/market/redis/stock/${ticker}`);
+      const response = await axiosInstance.get(`/redis/stock/${ticker}`);
       if (response.data) {
         return response.data;
       }
@@ -71,7 +71,7 @@ const useRealtimeStocks = (options = {}) => {
       }
 
       // 3) 신규 요청 수행 및 캐시 저장
-      inFlightPromise = axiosInstance.get('/market/redis/stocks');
+      inFlightPromise = axiosInstance.get('/redis/stocks');
       const response = await inFlightPromise;
       const data = response?.data;
       if (Array.isArray(data) && data.length > 0) {

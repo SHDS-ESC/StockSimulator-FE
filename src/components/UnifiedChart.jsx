@@ -191,6 +191,44 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
     return { combined: [...prevCandles, ...monthCandles], start, end };
   };
 
+  // 오래된 구간 추가 로드 (차트 왼쪽으로 스크롤 시)
+  const loadOlderChunk = async () => {
+    if (!initedRef.current || isLoadingRef.current) return;
+    const arr = dataRef.current || [];
+    if (!arr.length) return;
+    // 현재 보이는 논리 범위 (인덱스 기준) 저장해 스크롤 위치 보정
+    let currentRange = null;
+    try { currentRange = chartRef.current?.timeScale().getVisibleLogicalRange(); } catch (_) {}
+    const firstEpoch = toEpoch(arr[0]?.time);
+    if (!Number.isFinite(firstEpoch)) return;
+    const { y: fy, m: fm } = ymdFromEpochUTC(firstEpoch);
+    // 이전 달 데이터 로드
+    const prevMonth = fm === 1 ? 12 : fm - 1;
+    const prevYear = fm === 1 ? fy - 1 : fy;
+    try {
+      isLoadingRef.current = true;
+      const { combined } = await loadMonthWithPrevWeek(prevYear, prevMonth);
+      // combined = (prevMonth-1의 일부) + prevMonth 전부 → 현재 데이터와 겹칠 수 있으니 시간 기준으로 유니크 머지
+      const seen = new Set(arr.map((c) => toEpoch(c.time)));
+      const older = (combined || []).filter((c) => !seen.has(toEpoch(c.time)));
+      if (older.length === 0) return;
+      const merged = [...older, ...arr].sort((a, b) => toEpoch(a.time) - toEpoch(b.time));
+      const added = older.length;
+      dataRef.current = merged;
+      try { seriesRef.current?.setData(merged); } catch (_) {}
+      updateIndicators(merged);
+      // 스크롤 위치 보정: 앞에 데이터가 추가된 만큼 오른쪽으로 같은 양 이동
+      if (currentRange && typeof currentRange.from === 'number' && typeof currentRange.to === 'number') {
+        const shifted = { from: currentRange.from + added, to: currentRange.to + added };
+        try { chartRef.current?.timeScale().setVisibleLogicalRange(shifted); } catch (_) {}
+      }
+    } catch (_) {
+      /* ignore */
+    } finally {
+      isLoadingRef.current = false;
+    }
+  };
+
   // 차트 초기화 및 데이터 로드
   useEffect(() => {
     let isActive = true;
@@ -305,6 +343,16 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
         }
       };
       window.addEventListener("resize", onResize);
+      // 왼쪽 스크롤 근접 시 추가 로드 트리거
+      try {
+        localChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+          if (!range || typeof range.from !== 'number') return;
+          // 왼쪽 끝에 가까워지면 이전 달 로드 (여유 구간 3칸)
+          if (range.from < 3) {
+            loadOlderChunk();
+          }
+        });
+      } catch (_) {}
       return () => {
         window.removeEventListener("resize", onResize);
       };
@@ -358,8 +406,8 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
           }
           lastIdx = i;
         }
-        if (lastIdx < 0) lastIdx = 0;
-        const initialSlice = combined.slice(0, lastIdx + 1);
+        // 선택 날짜의 캔들은 포함하지 않음 (전일까지만)
+        const initialSlice = lastIdx >= 0 ? combined.slice(0, lastIdx + 1) : [];
         try { seriesRef.current?.setData(initialSlice); } catch (_) {}
         updateIndicators(initialSlice);
         if (initialSlice.length > 0) {
