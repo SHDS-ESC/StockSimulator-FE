@@ -22,6 +22,7 @@ const HomePage = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
+  const [startInvested, setStartInvested] = useState([]);
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
     totalInvested: 0,
@@ -29,6 +30,9 @@ const HomePage = () => {
     cashBalance: 0,
     nickname: "프로필을 선택해주세요",
     state: true,
+    change: 0,
+    changeAmount: 0,
+    seedMoney :0
   });
 
   // 실시간 주식 데이터 훅 사용
@@ -37,7 +41,7 @@ const HomePage = () => {
     loading: stocksLoading,
     error: stocksError,
     lastUpdate,
-    isUpdating
+    isUpdating,
   } = useRealtimeStocks({ enabled: true });
 
   // 타임라인 기반 과거 모드 여부 판별 (프로필 변경/턴 변경에 반응)
@@ -48,22 +52,30 @@ const HomePage = () => {
       return Number(selectedProfile.timelineId) === 9;
     }
     // 2) 마지막 백업: 기존 로직 유지(임시 호환)
-    const name = String(selectedProfile?.name || '').toLowerCase();
+    const name = String(selectedProfile?.name || "").toLowerCase();
     const stateRealtime = selectedProfile?.state === true;
-    return stateRealtime || name.includes('실시간');
-  }, [selectedProfile?.timelineId, selectedProfile?.name, selectedProfile?.state]);
+    return stateRealtime || name.includes("실시간");
+  }, [
+    selectedProfile?.timelineId,
+    selectedProfile?.name,
+    selectedProfile?.state,
+  ]);
   const isHistorical = !isRealtime;
   const simDate = useMemo(() => {
     if (!isHistorical) return null;
     const d = new Date(currentDate || selectedProfile?.processDate);
     if (Number.isNaN(d.getTime())) return null;
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
+    return {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate(),
+    };
   }, [isHistorical, currentDate, selectedProfile?.processDate]);
   const dateKey = useMemo(() => {
     if (!isHistorical) return null;
-    const y = String(simDate?.year || '');
-    const m = String(simDate?.month || '').padStart(2, '0');
-    const d = String(simDate?.day || '').padStart(2, '0');
+    const y = String(simDate?.year || "");
+    const m = String(simDate?.month || "").padStart(2, "0");
+    const d = String(simDate?.day || "").padStart(2, "0");
     if (!y || !m || !d) return null;
     return `${y}-${m}-${d}`;
   }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
@@ -75,7 +87,12 @@ const HomePage = () => {
   const [histCache, setHistCache] = useState({}); // 날짜별 캐시
 
   useEffect(() => {
-    if (!isHistorical || !dateKey) { setHistTop([]); setHistLoading(false); setHistError(null); return; }
+    if (!isHistorical || !dateKey) {
+      setHistTop([]);
+      setHistLoading(false);
+      setHistError(null);
+      return;
+    }
 
     if (histCache[dateKey]) {
       setHistTop(histCache[dateKey]);
@@ -84,14 +101,23 @@ const HomePage = () => {
     }
 
     const run = async () => {
-      setHistLoading(true); setHistError(null);
+      setHistLoading(true);
+      setHistError(null);
       try {
-        const resp = await axiosInstance.get('/db/snapshot', { params: { date: dateKey, page: 1, size: 3, sort: 'changePercent,desc' } });
+        const resp = await axiosInstance.get("/db/snapshot", {
+          params: {
+            date: dateKey,
+            page: 1,
+            size: 3,
+            sort: "changePercent,desc",
+          },
+        });
         const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
         setHistTop(rows);
-        setHistCache(prev => ({ ...prev, [dateKey]: rows }));
+        setHistCache((prev) => ({ ...prev, [dateKey]: rows }));
       } catch (_) {
-        setHistTop([]); setHistError('과거 데이터 계산 실패');
+        setHistTop([]);
+        setHistError("과거 데이터 계산 실패");
       } finally {
         setHistLoading(false);
       }
@@ -99,22 +125,26 @@ const HomePage = () => {
     run();
   }, [isHistorical, dateKey, histCache]);
 
-
   useConfirmLogin(null);
   // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
   const loadProfile = async () => {
     try {
       const list = await fetchProfiles();
-      const stcokList = await fetchStocks();
+      const totalCurrentPrice = await fetchStocks();
       // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
       if (lastProfileId && Number(lastProfileId) > 0) {
-        setHoldingStocks(stcokList);
         try {
           const response = await axiosInstance.get(
             `userprofile/profile/${lastProfileId}`,
             { withCredentials: true }
           );
-          setSelectedProfile(response.data);
+          setStartInvested(response.data.totalInvested);
+          console.log("인" + startInvested);
+          console.log("커" + totalCurrentPrice);
+          setSelectedProfile({
+            ...response.data,
+            totalInvested: totalCurrentPrice,
+          });
           localStorage.setItem("newProfile", JSON.stringify(response.data));
           setCurrentDate(response.data.processDate);
         } catch (e) {
@@ -150,27 +180,28 @@ const HomePage = () => {
   // 보유 주식 리스트 불러오기
   const fetchStocks = async () => {
     if (!email || String(email).trim() === "") return [];
+    const isoDate =
+      currentDate instanceof Date
+        ? currentDate.toISOString().slice(0, 10)
+        : currentDate;
     try {
       const response = await axiosInstance.get(
-        `holdings/stocks/${lastProfileId}`,
+        `holdings/stocks/${lastProfileId}/${isoDate}`,
         { withCredentials: true }
       );
-      const stockList = response.data || [];
+      const stockList = response.data.holdingsResponseDTOS || [];
       setHoldingStocks(stockList);
-      return stockList;
+      return response.data.totalCurrentPrice;
     } catch (error) {
       console.error("Error fetching profiles:", error);
       return [];
     }
   };
 
-  useEffect(
-    () => {
-      if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
-      loadProfile();
-    },
-    [email, lastProfileId]
-  );
+  useEffect(() => {
+    if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
+    loadProfile();
+  }, [email, lastProfileId, currentDate]);
 
   // 프로필 선택
   const handleProfileSelect = (profile) => {
@@ -187,7 +218,9 @@ const HomePage = () => {
         try {
           localStorage.setItem("newProfile", JSON.stringify(profile));
           if (profile?.processDate) setCurrentDate(profile.processDate);
-        } catch (_) { /* ignore */ }
+        } catch (_) {
+          /* ignore */
+        }
         // 프로필 변경 시 급상승 종목 즉시 재계산 트리거
         setTimeout(() => {
           // selectedProfile/processDate 변경과 currentDate 설정에 의해 useEffect가 재실행됨
@@ -200,17 +233,21 @@ const HomePage = () => {
   const topRisingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
     const toPct = (val) => {
-      const n = parseFloat(String(val || '').replace('%', '').replace('+',''));
+      const n = parseFloat(
+        String(val || "")
+          .replace("%", "")
+          .replace("+", "")
+      );
       return Number.isFinite(n) ? n : -Infinity;
     };
     return stocks
-      .map(s => ({
+      .map((s) => ({
         ...s,
-        price: String(s?.price ?? ''),
-        change: String(s?.change ?? ''),
-        changePercent: String(s?.changePercent ?? ''),
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
       }))
-      .filter(s => s.changePercent && toPct(s.changePercent) !== -Infinity)
+      .filter((s) => s.changePercent && toPct(s.changePercent) !== -Infinity)
       .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
       .slice(0, 3);
   }, [stocks]);
@@ -285,9 +322,25 @@ const HomePage = () => {
         {/* 총 잔고 */}
         <div className="mb-4">
           <h3 className="text-white text-3xl font-bold">
-            $ {selectedProfile?.cashBalance}
+            ${selectedProfile.cashBalance + selectedProfile.totalInvested}
           </h3>
-          <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
+          {selectedProfile.totalAssets > 0 &&
+            (() => {
+              const totalCurrent =
+                selectedProfile.cashBalance + selectedProfile.totalInvested;
+              const totalInitial = selectedProfile.seedMoney;
+              const diffPercent = (
+                ((totalCurrent - totalInitial) / totalInitial) *
+                100
+              ).toFixed(10);
+              return (
+                <p
+                  className={`text-xs ${diffPercent >= 0 ? "text-red-500" : "text-blue-400"}`}
+                >
+                  {diffPercent >= 0 ? `+${diffPercent}%` : `${diffPercent}%`}
+                </p>
+              );
+            })()}
         </div>
 
         {/* 투자/현금 정보 */}
@@ -295,13 +348,13 @@ const HomePage = () => {
           <div>
             <p className="text-gray-400 text-xs mb-1">투자</p>
             <p className="text-white text-lg font-semibold">
-              $ {selectedProfile?.totalAssets}
+              $ {selectedProfile?.totalInvested}
             </p>
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-1">현금</p>
             <p className="text-white text-lg font-semibold">
-              $ {selectedProfile?.totalInvested}
+              $ {selectedProfile?.cashBalance}
             </p>
           </div>
         </div>
@@ -341,13 +394,18 @@ const HomePage = () => {
                   </div>
                 </div>
                 <div className="text-right">
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-[10px] mb-2">
+                      {stock.quantity}주
+                    </p>
+                  </div>
                   <p className="text-white font-semibold text-sm">
                     $ {stock.price}
                   </p>
                   <p
                     className={`text-xs ${stock.change > 0 ? "text-red-500" : "text-blue-400"}`}
                   >
-                    $ {stock.change}%
+                    ${stock.changeAmount} ({stock.change})%
                   </p>
                 </div>
               </div>
@@ -365,7 +423,10 @@ const HomePage = () => {
           {(isHistorical ? histLoading : stocksLoading) ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
-                <div key={index} className="flex items-center justify-between p-2 animate-pulse">
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2 animate-pulse"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-slate-700 rounded-lg"></div>
                     <div>
@@ -382,74 +443,86 @@ const HomePage = () => {
             </div>
           ) : (isHistorical ? histError : stocksError) ? (
             <div className="text-center py-4">
-              <p className="text-red-400 text-sm">{isHistorical ? histError : stocksError}</p>
+              <p className="text-red-400 text-sm">
+                {isHistorical ? histError : stocksError}
+              </p>
             </div>
-          ) : (isHistorical ? histTop.length === 0 : topRisingStocks.length === 0) ? (
+          ) : (
+              isHistorical ? histTop.length === 0 : topRisingStocks.length === 0
+            ) ? (
             <div className="text-center py-4">
-              <p className="text-gray-400 text-sm">{isHistorical ? '데이터를 불러올 수 없습니다' : '실시간 데이터 준비중'}</p>
+              <p className="text-gray-400 text-sm">
+                {isHistorical
+                  ? "데이터를 불러올 수 없습니다"
+                  : "실시간 데이터 준비중"}
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {(isHistorical ? histTop : topRisingStocks).map((stock, index) => (
-                <div
-                  key={`trending-${stock.symbol}-${index}`}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                      <img
-                        src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                        alt={stock.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                          e.target.nextSibling.style.display = "flex";
-                        }}
-                      />
-                      <span className="text-gray-600 font-bold text-xs hidden">
-                        {stock.symbol}
-                      </span>
+              {(isHistorical ? histTop : topRisingStocks).map(
+                (stock, index) => (
+                  <div
+                    key={`trending-${stock.symbol}-${index}`}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                        <img
+                          src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                          alt={stock.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                        <span className="text-gray-600 font-bold text-xs hidden">
+                          {stock.symbol}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="text-white font-medium text-sm">
+                          {stock.name}
+                        </h4>
+                        <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-white font-medium text-sm">
-                        {stock.name}
-                      </h4>
-                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
+                    <div className="text-right">
+                      <p className="text-white font-semibold text-sm">
+                        {String(stock.price).startsWith("$")
+                          ? String(stock.price)
+                          : `$${String(stock.price)}`}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <p
+                          className={`text-xs font-medium ${
+                            String(stock.change).includes("+")
+                              ? "text-red-500"
+                              : "text-blue-500"
+                          }`}
+                        >
+                          {String(stock.change)}
+                        </p>
+                        <p
+                          className={`text-xs ${
+                            String(stock.changePercent || "").includes("+")
+                              ? "text-red-500"
+                              : "text-blue-500"
+                          }`}
+                        >
+                          ({String(stock.changePercent)})
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-white font-semibold text-sm">
-                      {String(stock.price).startsWith('$') ? String(stock.price) : `$${String(stock.price)}`}
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <p
-                        className={`text-xs font-medium ${
-                          String(stock.change).includes("+")
-                            ? "text-red-500"
-                            : "text-blue-500"
-                        }`}
-                      >
-                        {String(stock.change)}
-                      </p>
-                      <p
-                        className={`text-xs ${
-                          String(stock.changePercent || '').includes("+")
-                            ? "text-red-500"
-                            : "text-blue-500"
-                        }`}
-                      >
-                        ({String(stock.changePercent)})
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
           )}
           {/* 더 많은 주식목록보기 버튼 */}
           <div className="mt-3 pt-3 border-t border-slate-600">
             <button
-              onClick={() => navigate('/stocks')}
+              onClick={() => navigate("/stocks")}
               className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
             >
               더 많은 주식목록보기
@@ -514,7 +587,9 @@ const HomePage = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">{profile.name}</p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        {profile.name}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
