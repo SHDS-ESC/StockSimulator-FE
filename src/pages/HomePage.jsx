@@ -15,6 +15,72 @@ import useConfirmLogin from "../hooks/useConfirmLogin";
 import useRealtimeStocks from "../hooks/useRealtimeStocks";
 import useDateStore from "@/store/useDateStore";
 
+// 유틸리티 함수들
+const formatCurrency = (value) => {
+  if (value === null || value === undefined || value === "" || value === "0") return "$0";
+  const numValue = typeof value === 'string' ? parseFloat(value.replace(/[$,]/g, '')) : value;
+  if (!Number.isFinite(numValue)) return "$0";
+  return `${numValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+};
+
+const formatPercentage = (value) => {
+  if (value === null || value === undefined || value === "") return "0.00%";
+  const numValue = typeof value === 'string' ? parseFloat(value.replace(/[+%]/g, '')) : value;
+  if (!Number.isFinite(numValue)) return "0.00%";
+  return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}%`;
+};
+
+const formatVolume = (val) => {
+  const n = parseFloat(String(val ?? "").replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(n)) return "-";
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString('en-US');
+};
+
+const parseNumericValue = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
+  const n = parseFloat(
+    String(val)
+      .replace("%", "")
+      .replace(/\+/g, "")
+      .trim()
+  );
+  return Number.isFinite(n) ? n : 0;
+};
+
+const getColorClass = (value) => {
+  if (value > 0) return "text-red-500";
+  if (value < 0) return "text-blue-400";
+  return "text-gray-400";
+};
+
+// Shimmer 스켈레톤 컴포넌트
+const ShimmerSkeleton = ({ className }) => (
+  <div className={`bg-slate-700 rounded ${className} relative overflow-hidden`}>
+    <div className="absolute inset-0">
+      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/15 to-transparent transform -translate-x-full animate-shimmer-sweep"></div>
+    </div>
+  </div>
+);
+
+// 커스텀 CSS 애니메이션을 위한 스타일
+const shimmerStyles = `
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer-sweep {
+  animation: shimmer-sweep 2s infinite ease-in-out;
+}
+`;
+
 const HomePage = () => {
   const navigate = useNavigate();
   const [holdingStocks, setHoldingStocks] = useState([]);
@@ -22,7 +88,7 @@ const HomePage = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const { email, lastProfileId, clear } = useLoginStore();
-  const [startInvested, setStartInvested] = useState([]);
+  const [startInvested, setStartInvested] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
     totalInvested: 0,
@@ -44,14 +110,12 @@ const HomePage = () => {
     isUpdating,
   } = useRealtimeStocks({ enabled: true });
 
-  // 타임라인 기반 과거 모드 여부 판별 (프로필 변경/턴 변경에 반응)
+  // 타임라인 기반 과거 모드 여부 판별
   const { currentDate } = useDateStore();
   const isRealtime = useMemo(() => {
-    // 1) 백엔드 DTO의 timelineId가 오면 그것으로 판별 (권장)
     if (selectedProfile?.timelineId != null) {
       return Number(selectedProfile.timelineId) === 9;
     }
-    // 2) 마지막 백업: 기존 로직 유지(임시 호환)
     const name = String(selectedProfile?.name || "").toLowerCase();
     const stateRealtime = selectedProfile?.state === true;
     return stateRealtime || name.includes("실시간");
@@ -60,7 +124,9 @@ const HomePage = () => {
     selectedProfile?.name,
     selectedProfile?.state,
   ]);
+
   const isHistorical = !isRealtime;
+  
   const simDate = useMemo(() => {
     if (!isHistorical) return null;
     const d = new Date(currentDate || selectedProfile?.processDate);
@@ -71,6 +137,7 @@ const HomePage = () => {
       day: d.getUTCDate(),
     };
   }, [isHistorical, currentDate, selectedProfile?.processDate]);
+
   const dateKey = useMemo(() => {
     if (!isHistorical) return null;
     const y = String(simDate?.year || "");
@@ -80,24 +147,29 @@ const HomePage = () => {
     return `${y}-${m}-${d}`;
   }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
 
-  // 과거 모드: 해당 날짜 기준 급상승 종목 계산 (종가 vs 전일 종가)
+  // 과거 모드 관련 상태
   const [histTop, setHistTop] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
   const [histError, setHistError] = useState(null);
-  const [histCache, setHistCache] = useState({}); // 날짜별 캐시: { [dateKey]: { rising:[], falling:[], volume:[] } }
+  const [histCache, setHistCache] = useState({});
+  const [topFilter, setTopFilter] = useState("rising");
 
-  // TOP3 탭 상태 (상승률/하락률/거래량)
-  const [topFilter, setTopFilter] = useState("rising"); // 'rising' | 'falling' | 'volume'
-
-  // 거래량 축약 표시
-  const formatVolume = (val) => {
-    const n = parseFloat(String(val ?? "").replace(/[^0-9.-]/g, ""));
-    if (!Number.isFinite(n)) return "-";
-    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return String(Math.round(n));
-  };
+  // 포트폴리오 메트릭스 계산
+  const portfolioMetrics = useMemo(() => {
+    const totalCurrent = (selectedProfile?.cashBalance || 0) + (selectedProfile?.totalInvested || 0);
+    const totalInitial = selectedProfile?.seedMoney || 0;
+    const investmentPL = (selectedProfile?.totalInvested || 0) - (startInvested || 0);
+    const overallPL = totalCurrent - totalInitial;
+    
+    return {
+      totalCurrent,
+      totalInitial,
+      overallPL,
+      overallPLPercent: totalInitial > 0 ? (overallPL / totalInitial) * 100 : 0,
+      investmentPL,
+      investmentPLPercent: startInvested > 0 ? (investmentPL / startInvested) * 100 : 0
+    };
+  }, [selectedProfile, startInvested]);
 
   useEffect(() => {
     if (!isHistorical || !dateKey) {
@@ -144,24 +216,22 @@ const HomePage = () => {
   }, [isHistorical, dateKey, topFilter, histCache]);
 
   useConfirmLogin(null);
-  // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
+
   const loadProfile = async () => {
     try {
       const list = await fetchProfiles();
       const totalCurrentPrice = await fetchStocks();
-      // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
+      
       if (lastProfileId && Number(lastProfileId) > 0) {
         try {
           const response = await axiosInstance.get(
             `userprofile/profile/${lastProfileId}`,
             { withCredentials: true }
           );
-          setStartInvested(response.data.totalInvested);
-          console.log("인" + startInvested);
-          console.log("커" + totalCurrentPrice);
+          setStartInvested(response.data.totalInvested || 0);
           setSelectedProfile({
             ...response.data,
-            totalInvested: totalCurrentPrice,
+            totalInvested: totalCurrentPrice || 0,
           });
           localStorage.setItem("newProfile", JSON.stringify(response.data));
           setCurrentDate(response.data.processDate);
@@ -178,7 +248,6 @@ const HomePage = () => {
     }
   };
 
-  // 모든 프로필 불러오기
   const fetchProfiles = async () => {
     if (!email || String(email).trim() === "") return [];
     try {
@@ -195,9 +264,8 @@ const HomePage = () => {
     }
   };
 
-  // 보유 주식 리스트 불러오기
   const fetchStocks = async () => {
-    if (!email || String(email).trim() === "") return [];
+    if (!email || String(email).trim() === "") return 0;
     const isoDate =
       currentDate instanceof Date
         ? currentDate.toISOString().slice(0, 10)
@@ -209,19 +277,18 @@ const HomePage = () => {
       );
       const stockList = response.data.holdingsResponseDTOS || [];
       setHoldingStocks(stockList);
-      return response.data.totalCurrentPrice;
+      return response.data.totalCurrentPrice || 0;
     } catch (error) {
-      console.error("Error fetching profiles:", error);
-      return [];
+      console.error("Error fetching stocks:", error);
+      return 0;
     }
   };
 
   useEffect(() => {
-    if (!email || String(email).trim() === "") return; // 이메일 준비 전엔 호출 금지
+    if (!email || String(email).trim() === "") return;
     loadProfile();
   }, [email, lastProfileId, currentDate]);
 
-  // 프로필 선택
   const handleProfileSelect = (profile) => {
     axiosInstance
       .post(
@@ -239,80 +306,34 @@ const HomePage = () => {
         } catch (_) {
           /* ignore */
         }
-        // 프로필 변경 시 급상승 종목 즉시 재계산 트리거
-        setTimeout(() => {
-          // selectedProfile/processDate 변경과 currentDate 설정에 의해 useEffect가 재실행됨
-        }, 0);
         setTimeout(() => setIsProfileModalOpen(false), 200);
       });
   };
 
-  // 등락률 순으로 정렬된 상위 3개 주식
+  // TOP3 주식 계산
   const topRisingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
-    const toPct = (val) => {
-      const n = parseFloat(
-        String(val || "")
-          .replace("%", "")
-          .replace("+", "")
-      );
-      return Number.isFinite(n) ? n : -Infinity;
-    };
     return stocks
-      .map((s) => ({
-        ...s,
-        price: String(s?.price ?? ""),
-        change: String(s?.change ?? ""),
-        changePercent: String(s?.changePercent ?? ""),
-      }))
-      .filter((s) => s.changePercent && toPct(s.changePercent) !== -Infinity)
-      .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
+      .filter((s) => s.changePercent && parseNumericValue(s.changePercent) !== 0)
+      .sort((a, b) => parseNumericValue(b.changePercent) - parseNumericValue(a.changePercent))
       .slice(0, 3);
   }, [stocks]);
 
-  // 하락률 상위(절대값 기준 하락 큰 것) 3개
   const topFallingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
-    const toPct = (val) => {
-      const n = parseFloat(
-        String(val || "")
-          .replace("%", "")
-          .replace("+", "")
-      );
-      return Number.isFinite(n) ? n : Infinity;
-    };
     return stocks
-      .map((s) => ({
-        ...s,
-        price: String(s?.price ?? ""),
-        change: String(s?.change ?? ""),
-        changePercent: String(s?.changePercent ?? ""),
-      }))
-      .filter((s) => s.changePercent && toPct(s.changePercent) !== Infinity)
-      .sort((a, b) => toPct(a.changePercent) - toPct(b.changePercent))
+      .filter((s) => s.changePercent && parseNumericValue(s.changePercent) !== 0)
+      .sort((a, b) => parseNumericValue(a.changePercent) - parseNumericValue(b.changePercent))
       .slice(0, 3);
   }, [stocks]);
 
-  // 거래량 상위 3개
   const topVolumeStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
-    const toNum = (val) => {
-      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
-      return Number.isFinite(n) ? n : -Infinity;
-    };
     return stocks
-      .map((s) => ({
-        ...s,
-        price: String(s?.price ?? ""),
-        change: String(s?.change ?? ""),
-        changePercent: String(s?.changePercent ?? ""),
-        volume: String(s?.volume ?? "0"),
-      }))
-      .sort((a, b) => toNum(b.volume) - toNum(a.volume))
+      .sort((a, b) => parseNumericValue(b.volume) - parseNumericValue(a.volume))
       .slice(0, 3);
   }, [stocks]);
 
-  // 실시간 모드에서 선택된 TOP3 리스트
   const selectedRtList = useMemo(() => {
     switch (topFilter) {
       case "falling":
@@ -326,7 +347,6 @@ const HomePage = () => {
   }, [topFilter, topRisingStocks, topFallingStocks, topVolumeStocks]);
 
   const handleCreateProfile = () => {
-    // Character 페이지로 이동
     navigate("/character");
   };
 
@@ -345,21 +365,12 @@ const HomePage = () => {
     navigate("/");
   };
 
-  // const toggleFavorite = (stockSymbol) => {
-  //   setFavoriteStocks((prev) => {
-  //     const newFavorites = new Set(prev);
-  //     if (newFavorites.has(stockSymbol)) {
-  //       newFavorites.delete(stockSymbol);
-  //     } else {
-  //       newFavorites.add(stockSymbol);
-  //     }
-  //     return newFavorites;
-  //   });
-  // };
-
   return (
     <div className="h-full pt-5 pb-10">
-      {/* 상단 로그인/로그아웃 액션 (상태에 따라 토글) */}
+      {/* 커스텀 CSS 스타일 추가 */}
+      <style jsx>{shimmerStyles}</style>
+      
+      {/* 상단 로그인/로그아웃 액션 */}
       <div className="px-4 mb-3 flex gap-2">
         {sessionStorage.getItem("accessToken") ? (
           <button
@@ -370,140 +381,169 @@ const HomePage = () => {
           </button>
         ) : null}
       </div>
-      {/* 전체 콘텐츠 영역 */}
 
-      {/* 자산 정보 섹션 (다크 배경) */}
-      <div className="bg-slate-950 mx-4 rounded-xl p-1 mb-4">
-        {/* 프로필명 */}
-        <div className="mb-4">
-          <div
-            className="flex items-center gap-2 cursor-pointer"
-            onClick={() => setIsProfileModalOpen(true)}
-          >
-            <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
-            <h2 className="text-white text-lg font-semibold">
-              {selectedProfile?.nickname}
-            </h2>
-            <span className="text-gray-400 text-sm">
-              {selectedProfile
-                ? "TimeLine : " + selectedProfile.name
-                : "TimeLine : 없음"}
-            </span>
+      {/* 자산 정보 섹션 */}
+      <div className="bg-slate-950 mx-4 rounded-xl mb-5">
+        {!selectedProfile?.id || selectedProfile?.id === 0 ? (
+          // Shimmer 스켈레톤 UI
+          <div>
+            {/* 프로필명 스켈레톤 */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <ShimmerSkeleton className="w-3 h-3 rounded-full" />
+                <ShimmerSkeleton className="h-5 w-32" />
+                <ShimmerSkeleton className="h-4 w-24" />
+              </div>
+            </div>
+            {/* 총 잔고 스켈레톤 */}
+            <div className="mb-4">
+              <ShimmerSkeleton className="h-9 w-40 mb-2" />
+              <ShimmerSkeleton className="h-4 w-32" />
+            </div>
+            {/* 투자/현금 정보 스켈레톤 */}
+            <div className="flex justify-between mb-4">
+              <div>
+                <ShimmerSkeleton className="h-3 w-8 mb-1" />
+                <ShimmerSkeleton className="h-6 w-20 mb-1" />
+                <ShimmerSkeleton className="h-3 w-24" />
+              </div>
+              <div>
+                <ShimmerSkeleton className="h-3 w-8 mb-1" />
+                <ShimmerSkeleton className="h-6 w-20" />
+              </div>
+            </div>
+            {/* 주문 내역 스켈레톤 */}
+            <div className="flex items-center justify-between">
+              <ShimmerSkeleton className="h-4 w-16" />
+              <ShimmerSkeleton className="w-4 h-4" />
+            </div>
           </div>
-        </div>
+        ) : (
+          // 실제 데이터
+          <>
+            {/* 프로필명 */}
+            <div className="mb-4">
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setIsProfileModalOpen(true)}
+              >
+                <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
+                <h2 className="text-white text-lg font-semibold">
+                  {selectedProfile?.nickname}
+                </h2>
+                <span className="text-gray-400 text-sm">
+                  TimeLine : {selectedProfile?.name || "없음"}
+                </span>
+              </div>
+            </div>
 
-        {/* 총 잔고 */}
-        <div className="mb-4">
-          <h3 className="text-white text-3xl font-bold">
-            ${selectedProfile.cashBalance + selectedProfile.totalInvested}
-          </h3>
-          {selectedProfile.totalAssets > 0 &&
-            (() => {
-              const totalCurrent =
-                selectedProfile.cashBalance + selectedProfile.totalInvested;
-              const totalInitial = selectedProfile.seedMoney;
-              const diffPrice = (totalCurrent - totalInitial).toFixed(3);
-              const diffPercent = (
-                ((totalCurrent - totalInitial) / totalInitial) *
-                100
-              ).toFixed(3);
-              return (
-                <p
-                  className={`text-xs ${diffPrice > 0 ? "text-red-500" : "text-blue-400"}`}
-                >
-                  {diffPrice > 0 ? "+" : ""}${diffPrice} ({diffPrice > 0 ? "+" : ""}
-                  {diffPercent}%)
+            {/* 총 잔고 */}
+            <div className="mb-4">
+              <h3 className="text-white text-3xl font-bold">
+                {formatCurrency(portfolioMetrics.totalCurrent)}
+              </h3>
+              {selectedProfile?.totalAssets > 0 && (
+                <p className={`text-xs ${getColorClass(portfolioMetrics.overallPL)}`}>
+                  {formatCurrency(portfolioMetrics.overallPL)} ({formatPercentage(portfolioMetrics.overallPLPercent)})
                 </p>
-              );
-            })()}
-        </div>
+              )}
+            </div>
 
-        {/* 투자/현금 정보 */}
-        <div className="flex justify-between mb-4">
-          <div>
-            <p className="text-gray-400 text-xs mb-1">투자 </p>
+            {/* 투자/현금 정보 */}
+            <div className="flex justify-between mb-4">
+              <div>
+                <p className="text-gray-400 text-xs mb-1">투자</p>
+                <p className="text-white text-lg font-semibold">
+                  {formatCurrency(selectedProfile?.totalInvested)}
+                </p>
+                <p className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}>
+                  {formatCurrency(portfolioMetrics.investmentPL)} ({formatPercentage(portfolioMetrics.investmentPLPercent)})
+                </p>
+              </div>
+              <div>
+                <p className="text-gray-400 text-xs mb-1">현금</p>
+                <p className="text-white text-lg font-semibold">
+                  {formatCurrency(selectedProfile?.cashBalance)}
+                </p>
+              </div>
+            </div>
 
-            <p className="text-white text-lg font-semibold">
-              $ {selectedProfile?.totalInvested}
-            </p>
-            <p
-              className={`text-xs ${
-                selectedProfile.totalInvested - startInvested >= 0
-                  ? "text-red-500"
-                  : "text-blue-400"
-              }`}
-            >
-              {((selectedProfile.totalInvested - startInvested) /startInvested) *100 >0 ? "+": ""}
-              ${(selectedProfile.totalInvested - startInvested).toFixed(2)} ({selectedProfile.totalInvested - startInvested > 0 ? "+" : ""}
-              {(((selectedProfile.totalInvested - startInvested) /startInvested) *100).toFixed(2)}%)
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs mb-1">현금</p>
-            <p className="text-white text-lg font-semibold">
-              $ {selectedProfile?.cashBalance}
-            </p>
-          </div>
-        </div>
-
-        {/* 주문 내역 */}
-        <div className="flex items-center justify-between">
-          <span className="text-white text-sm">주문 내역</span>
-          <ChevronRight className="w-4 h-4 text-white" />
-        </div>
+            {/* 주문 내역 */}
+            <div className="flex items-center justify-between">
+              <span className="text-white text-sm">주문 내역</span>
+              <ChevronRight className="w-4 h-4 text-white" />
+            </div>
+          </>
+        )}
       </div>
 
       {/* 보유 주식 섹션 */}
       <div className="bg-slate-950 px-4 py-2">
         <div className="bg-slate-800 rounded-xl p-3">
           <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
-          <div className="space-y-2">
-            {holdingStocks
-              .filter((stock) => stock.quantity && stock.quantity > 0)
-              .map((stock, index) => (
+          {!selectedProfile?.id || selectedProfile?.id === 0 || holdingStocks.length === 0 ? (
+            // Shimmer 스켈레톤 UI
+            <div className="space-y-2">
+              {[...Array(3)].map((_, index) => (
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                      <img
-                        src={stock.logo}
-                        alt={stock.name}
-                        className="w-full h-full object-cover"
-                      />
-                      <span className="text-gray-600 font-bold text-xs hidden">
-                        {stock.ticker}
-                      </span>
-                    </div>
+                    <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
                     <div>
-                      <h4 className="text-white font-medium text-sm">
-                        {stock.name}
-                      </h4>
-                      <p className="text-gray-400 text-xs">{stock.ticker}</p>
+                      <ShimmerSkeleton className="h-4 w-20 mb-1" />
+                      <ShimmerSkeleton className="h-3 w-12" />
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-white font-semibold text-[10px] mb-2">
-                      {stock.quantity}주
-                    </p>
-                    <p className="text-white font-semibold text-sm">
-                      ${stock.price}
-                    </p>
-                    <p
-                      className={`text-xs ${
-                        stock.change > 0 ? "text-red-500" : "text-blue-400"
-                      }`}
-                    >
-                      {stock.change > 0 ? "+" : ""}
-                      {stock.change}% ({stock.changeAmount > 0 ? "+" : ""}$
-                      {stock.changeAmount})
-                    </p>
+                    <ShimmerSkeleton className="h-3 w-8 mb-2" />
+                    <ShimmerSkeleton className="h-4 w-16 mb-1" />
+                    <ShimmerSkeleton className="h-3 w-20" />
                   </div>
                 </div>
               ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {holdingStocks
+                .filter((stock) => stock.quantity && stock.quantity > 0)
+                .map((stock, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                        <img
+                          src={stock.logo}
+                          alt={stock.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="text-gray-600 font-bold text-xs hidden">
+                          {stock.ticker}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="text-white font-medium text-sm">
+                          {stock.name}
+                        </h4>
+                        <p className="text-gray-400 text-xs">{stock.ticker}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-white font-semibold text-[10px] mb-2">
+                        {(stock.quantity || 0).toLocaleString('en-US')}주
+                      </p>
+                      <p className="text-white font-semibold text-sm">
+                        {formatCurrency(stock.price)}
+                      </p>
+                      <p className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}>
+                        {formatPercentage(stock.change)} ({formatCurrency(stock.changeAmount)})
+                      </p>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 실시간/과거 TOP3 섹션 (상승/하락/거래량 탭) */}
+      {/* TOP3 섹션 */}
       <div className="bg-slate-950 px-4 py-2">
         <div className="bg-slate-800 rounded-xl p-3">
           <div className="flex items-center justify-between mb-3">
@@ -511,55 +551,36 @@ const HomePage = () => {
               {topFilter === "rising" ? "상승률 TOP3" : topFilter === "falling" ? "하락률 TOP3" : "거래량 TOP3"}
             </h3>
             <div className="flex gap-2">
-              <button
-                onClick={() => setTopFilter("rising")}
-                className={`px-2 py-1 rounded-md text-xs font-medium ${
-                  topFilter === "rising"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700 text-gray-200"
-                }`}
-              >
-                상승률
-              </button>
-              <button
-                onClick={() => setTopFilter("falling")}
-                className={`px-2 py-1 rounded-md text-xs font-medium ${
-                  topFilter === "falling"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700 text-gray-200"
-                }`}
-              >
-                하락률
-              </button>
-              <button
-                onClick={() => setTopFilter("volume")}
-                className={`px-2 py-1 rounded-md text-xs font-medium ${
-                  topFilter === "volume"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700 text-gray-200"
-                }`}
-              >
-                거래량
-              </button>
+              {["rising", "falling", "volume"].map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setTopFilter(filter)}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === filter
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  {filter === "rising" ? "상승률" : filter === "falling" ? "하락률" : "거래량"}
+                </button>
+              ))}
             </div>
           </div>
+          
           {(isHistorical ? histLoading : stocksLoading) ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-2 animate-pulse"
-                >
+                <div key={index} className="flex items-center justify-between p-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-slate-700 rounded-lg"></div>
+                    <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
                     <div>
-                      <div className="h-4 bg-slate-700 rounded w-20 mb-1"></div>
-                      <div className="h-3 bg-slate-700 rounded w-16"></div>
+                      <ShimmerSkeleton className="h-4 w-20 mb-1" />
+                      <ShimmerSkeleton className="h-3 w-16" />
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="h-4 bg-slate-700 rounded w-16 mb-1"></div>
-                    <div className="h-3 bg-slate-700 rounded w-12"></div>
+                    <ShimmerSkeleton className="h-4 w-16 mb-1" />
+                    <ShimmerSkeleton className="h-3 w-12" />
                   </div>
                 </div>
               ))}
@@ -570,85 +591,65 @@ const HomePage = () => {
                 {isHistorical ? histError : stocksError}
               </p>
             </div>
-          ) : (
-              isHistorical ? histTop.length === 0 : selectedRtList.length === 0
-            ) ? (
+          ) : (isHistorical ? histTop.length === 0 : selectedRtList.length === 0) ? (
             <div className="text-center py-4">
               <p className="text-gray-400 text-sm">
-                {isHistorical
-                  ? "데이터를 불러올 수 없습니다"
-                  : "실시간 데이터 준비중"}
+                {isHistorical ? "데이터를 불러올 수 없습니다" : "실시간 데이터 준비중"}
               </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {(isHistorical ? histTop : selectedRtList).map(
-                (stock, index) => (
-                  <div
-                    key={`trending-${stock.symbol}-${index}`}
-                    className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
-                    onClick={() => navigate(`/stocks/${encodeURIComponent(String(stock.symbol || ""))}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                        <img
-                          src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                          alt={stock.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                        <span className="text-gray-600 font-bold text-xs hidden">
-                          {stock.symbol}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="text-white font-medium text-sm">
-                          {stock.name}
-                        </h4>
-                        <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                      </div>
+              {(isHistorical ? histTop : selectedRtList).map((stock, index) => (
+                <div
+                  key={`trending-${stock.symbol}-${index}`}
+                  className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
+                  onClick={() => navigate(`/stocks/${encodeURIComponent(String(stock.symbol || ""))}`)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                      <img
+                        src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                        alt={stock.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                      <span className="text-gray-600 font-bold text-xs hidden">
+                        {stock.symbol}
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-white font-semibold text-sm">
-                        {String(stock.price).startsWith("$")
-                          ? String(stock.price)
-                          : `$${String(stock.price)}`}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <p
-                          className={`text-xs font-medium ${
-                            String(stock.change).includes("+")
-                              ? "text-red-500"
-                              : "text-blue-500"
-                          }`}
-                        >
-                          {String(stock.change)}
-                        </p>
-                        <p
-                          className={`text-xs ${
-                            String(stock.changePercent || "").includes("+")
-                              ? "text-red-500"
-                              : "text-blue-500"
-                          }`}
-                        >
-                          ({String(stock.changePercent)})
-                        </p>
-                        {topFilter === "volume" && (
-                          <p className="text-xs text-gray-400 ml-1">
-                            거래량: {formatVolume(stock.volume)}
-                          </p>
-                        )}
-                      </div>
+                    <div>
+                      <h4 className="text-white font-medium text-sm">
+                        {stock.name}
+                      </h4>
+                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
                     </div>
                   </div>
-                )
-              )}
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-sm">
+                      {formatCurrency(stock.price)}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <p className={`text-xs font-medium ${getColorClass(parseNumericValue(stock.change))}`}>
+                        {formatPercentage(stock.change)}
+                      </p>
+                      <p className={`text-xs ${getColorClass(parseNumericValue(stock.changePercent))}`}>
+                        ({formatPercentage(stock.changePercent)})
+                      </p>
+                      {topFilter === "volume" && (
+                        <p className="text-xs text-gray-400 ml-1">
+                          거래량: {formatVolume(stock.volume)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
-          {/* 더 많은 주식목록보기 버튼 */}
+          
           <div className="mt-3 pt-3 border-t border-slate-600">
             <button
               onClick={() => navigate("/stocks")}
@@ -667,15 +668,11 @@ const HomePage = () => {
             className="w-full max-w-md mx-auto bg-slate-900 rounded-t-3xl transform transition-transform duration-300 ease-out"
             style={{ maxHeight: "600px" }}
           >
-            {/* 드래그 핸들 */}
             <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4"></div>
-
-            {/* 모달 헤더 */}
+            
             <div className="px-6 pb-4 border-b border-slate-700">
               <div className="flex items-center justify-between">
-                <h3 className="text-white text-xl font-semibold">
-                  프로필 선택
-                </h3>
+                <h3 className="text-white text-xl font-semibold">프로필 선택</h3>
                 <button
                   onClick={() => setIsProfileModalOpen(false)}
                   className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center active:scale-90 transition-transform touch-manipulation"
@@ -685,7 +682,6 @@ const HomePage = () => {
               </div>
             </div>
 
-            {/* 프로필 목록 */}
             <div
               className="px-6 py-4 space-y-3 overflow-y-auto scrollbar-hide"
               style={{ maxHeight: "400px" }}
@@ -694,12 +690,11 @@ const HomePage = () => {
                 <div
                   key={profile.id}
                   onClick={() => handleProfileSelect(profile)}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200
-      ${
-        profile.id === selectedProfile.id
-          ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
-          : "bg-slate-800 border-slate-700"
-      }`}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
+                    profile.id === selectedProfile.id
+                      ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
+                      : "bg-slate-800 border-slate-700"
+                  }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
@@ -716,13 +711,11 @@ const HomePage = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">
-                        {profile.name}
-                      </p>
+                      <p className="text-gray-400 text-sm mt-1">{profile.name}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
-                        $ {profile.cashBalance}
+                        {formatCurrency(profile.cashBalance)}
                       </p>
                       <p className="text-gray-400 text-xs">총자산</p>
                     </div>
@@ -731,7 +724,6 @@ const HomePage = () => {
               ))}
             </div>
 
-            {/* 새 프로필 추가 버튼 */}
             <div className="px-6 py-4 border-t border-slate-700">
               <button
                 onClick={handleCreateProfile}

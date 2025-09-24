@@ -225,7 +225,7 @@ function App() {
       )}
 
       <div className="bg-slate-950 w-full max-w-md flex-1 flex flex-col relative z-20">
-        <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative pt-16 pb-20">
+        <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative pt-16 pb-5">
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/trade" element={<TradePage />} />
