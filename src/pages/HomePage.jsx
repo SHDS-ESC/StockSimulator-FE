@@ -17,17 +17,49 @@ import useDateStore from "@/store/useDateStore";
 
 // 유틸리티 함수들
 const formatCurrency = (value) => {
-  if (value === null || value === undefined || value === "" || value === "0") return "$0";
-  const numValue = typeof value === 'string' ? parseFloat(value.replace(/[$,]/g, '')) : value;
-  if (!Number.isFinite(numValue)) return "$0";
-  return `${numValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  if (value === null || value === undefined || value === "" || value === "0")
+    return "$ 0";
+
+  const numValue =
+    typeof value === "string" ? parseFloat(value.replace(/[$,]/g, "")) : value;
+
+  if (!Number.isFinite(numValue)) return "$ 0";
+
+  const absValue = Math.abs(numValue);
+  const formatted = absValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0, // 소수점 없애기
+  });
+
+  return numValue < 0 ? `- ${formatted.replace("$","$ ")}` : `+${formatted.replace("$","$ ")}`;
+};
+
+const formatCurrencyValue = (value) => {
+  if (value === null || value === undefined || value === "" || value === "0")
+    return "$ 0";
+
+  const numValue =
+    typeof value === "string" ? parseFloat(value.replace(/[$,]/g, "")) : value;
+
+  if (!Number.isFinite(numValue)) return "$ 0";
+
+  const absValue = Math.abs(numValue);
+  const formatted = absValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0, // 소수점 없애기
+  });
+
+  return formatted.replace("$","$ ");
 };
 
 const formatPercentage = (value) => {
   if (value === null || value === undefined || value === "") return "0.00%";
-  const numValue = typeof value === 'string' ? parseFloat(value.replace(/[+%]/g, '')) : value;
+  const numValue =
+    typeof value === "string" ? parseFloat(value.replace(/[+%]/g, "")) : value;
   if (!Number.isFinite(numValue)) return "0.00%";
-  return `${numValue >= 0 ? '+' : ''}${numValue.toFixed(2)}%`;
+  return `${numValue >= 0 ? "+" : ""}${numValue.toFixed(2)}%`;
 };
 
 const formatVolume = (val) => {
@@ -36,17 +68,12 @@ const formatVolume = (val) => {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString('en-US');
+  return n.toLocaleString("en-US");
 };
 
 const parseNumericValue = (val) => {
   if (val === null || val === undefined || val === "") return 0;
-  const n = parseFloat(
-    String(val)
-      .replace("%", "")
-      .replace(/\+/g, "")
-      .trim()
-  );
+  const n = parseFloat(String(val).replace("%", "").replace(/\+/g, "").trim());
   return Number.isFinite(n) ? n : 0;
 };
 
@@ -126,7 +153,7 @@ const HomePage = () => {
   ]);
 
   const isHistorical = !isRealtime;
-  
+
   const simDate = useMemo(() => {
     if (!isHistorical) return null;
     const d = new Date(currentDate || selectedProfile?.processDate);
@@ -156,18 +183,22 @@ const HomePage = () => {
 
   // 포트폴리오 메트릭스 계산
   const portfolioMetrics = useMemo(() => {
-    const totalCurrent = (selectedProfile?.cashBalance || 0) + (selectedProfile?.totalInvested || 0);
+    const totalCurrent =
+      (selectedProfile?.cashBalance || 0) +
+      (selectedProfile?.totalInvested || 0);
     const totalInitial = selectedProfile?.seedMoney || 0;
-    const investmentPL = (selectedProfile?.totalInvested || 0) - (startInvested || 0);
+    const investmentPL =
+      (selectedProfile?.totalInvested || 0) - (startInvested || 0);
     const overallPL = totalCurrent - totalInitial;
-    
+
     return {
       totalCurrent,
       totalInitial,
       overallPL,
       overallPLPercent: totalInitial > 0 ? (overallPL / totalInitial) * 100 : 0,
       investmentPL,
-      investmentPLPercent: startInvested > 0 ? (investmentPL / startInvested) * 100 : 0
+      investmentPLPercent:
+        startInvested > 0 ? (investmentPL / startInvested) * 100 : 0,
     };
   }, [selectedProfile, startInvested]);
 
@@ -186,11 +217,12 @@ const HomePage = () => {
       return;
     }
 
-    const sortParam = topFilter === "rising"
-      ? "changePercent,desc"
-      : topFilter === "falling"
-      ? "changePercent,asc"
-      : "volume,desc";
+    const sortParam =
+      topFilter === "rising"
+        ? "changePercent,desc"
+        : topFilter === "falling"
+          ? "changePercent,asc"
+          : "volume,desc";
 
     const run = async () => {
       setHistLoading(true);
@@ -221,7 +253,7 @@ const HomePage = () => {
     try {
       const list = await fetchProfiles();
       const totalCurrentPrice = await fetchStocks();
-      
+
       if (lastProfileId && Number(lastProfileId) > 0) {
         try {
           const response = await axiosInstance.get(
@@ -314,16 +346,28 @@ const HomePage = () => {
   const topRisingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
     return stocks
-      .filter((s) => s.changePercent && parseNumericValue(s.changePercent) !== 0)
-      .sort((a, b) => parseNumericValue(b.changePercent) - parseNumericValue(a.changePercent))
+      .filter(
+        (s) => s.changePercent && parseNumericValue(s.changePercent) !== 0
+      )
+      .sort(
+        (a, b) =>
+          parseNumericValue(b.changePercent) -
+          parseNumericValue(a.changePercent)
+      )
       .slice(0, 3);
   }, [stocks]);
 
   const topFallingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
     return stocks
-      .filter((s) => s.changePercent && parseNumericValue(s.changePercent) !== 0)
-      .sort((a, b) => parseNumericValue(a.changePercent) - parseNumericValue(b.changePercent))
+      .filter(
+        (s) => s.changePercent && parseNumericValue(s.changePercent) !== 0
+      )
+      .sort(
+        (a, b) =>
+          parseNumericValue(a.changePercent) -
+          parseNumericValue(b.changePercent)
+      )
       .slice(0, 3);
   }, [stocks]);
 
@@ -369,7 +413,7 @@ const HomePage = () => {
     <div className="h-full pt-5 pb-10">
       {/* 커스텀 CSS 스타일 추가 */}
       <style jsx>{shimmerStyles}</style>
-      
+
       {/* 상단 로그인/로그아웃 액션 */}
       <div className="px-4 mb-3 flex gap-2">
         {sessionStorage.getItem("accessToken") ? (
@@ -427,7 +471,7 @@ const HomePage = () => {
                 className="flex items-center gap-2 cursor-pointer"
                 onClick={() => setIsProfileModalOpen(true)}
               >
-                <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
+                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                 <h2 className="text-white text-lg font-semibold">
                   {selectedProfile?.nickname}
                 </h2>
@@ -440,11 +484,14 @@ const HomePage = () => {
             {/* 총 잔고 */}
             <div className="mb-4">
               <h3 className="text-white text-3xl font-bold">
-                {formatCurrency(portfolioMetrics.totalCurrent)}
+                {formatCurrencyValue(portfolioMetrics.totalCurrent)}
               </h3>
               {selectedProfile?.totalAssets > 0 && (
-                <p className={`text-xs ${getColorClass(portfolioMetrics.overallPL)}`}>
-                  {formatCurrency(portfolioMetrics.overallPL)} ({formatPercentage(portfolioMetrics.overallPLPercent)})
+                <p
+                  className={`text-xs ${getColorClass(portfolioMetrics.overallPL)}`}
+                >
+                  {formatCurrency(portfolioMetrics.overallPL)} (
+                  {formatPercentage(portfolioMetrics.overallPLPercent)})
                 </p>
               )}
             </div>
@@ -454,16 +501,19 @@ const HomePage = () => {
               <div>
                 <p className="text-gray-400 text-xs mb-1">투자</p>
                 <p className="text-white text-lg font-semibold">
-                  {formatCurrency(selectedProfile?.totalInvested)}
+                   {formatCurrencyValue(selectedProfile?.totalInvested)}
                 </p>
-                <p className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}>
-                  {formatCurrency(portfolioMetrics.investmentPL)} ({formatPercentage(portfolioMetrics.investmentPLPercent)})
+                <p
+                  className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}
+                >
+                  {formatCurrency(portfolioMetrics.investmentPL)} (
+                  {formatPercentage(portfolioMetrics.investmentPLPercent)})
                 </p>
               </div>
               <div>
                 <p className="text-gray-400 text-xs mb-1">현금</p>
                 <p className="text-white text-lg font-semibold">
-                  {formatCurrency(selectedProfile?.cashBalance)}
+                 {formatCurrencyValue(selectedProfile?.cashBalance)}
                 </p>
               </div>
             </div>
@@ -481,7 +531,9 @@ const HomePage = () => {
       <div className="bg-slate-950 px-4 py-2">
         <div className="bg-slate-800 rounded-xl p-3">
           <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
-          {!selectedProfile?.id || selectedProfile?.id === 0 || holdingStocks.length === 0 ? (
+          {!selectedProfile?.id ||
+          selectedProfile?.id === 0 ||
+          holdingStocks.length === 0 ? (
             // Shimmer 스켈레톤 UI
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
@@ -506,9 +558,12 @@ const HomePage = () => {
               {holdingStocks
                 .filter((stock) => stock.quantity && stock.quantity > 0)
                 .map((stock, index) => (
-                  <div key={index} className="flex items-center justify-between">
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                      <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
                         <img
                           src={stock.logo}
                           alt={stock.name}
@@ -527,13 +582,16 @@ const HomePage = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-[10px] mb-2">
-                        {(stock.quantity || 0).toLocaleString('en-US')}주
+                        {(stock.quantity || 0).toLocaleString("en-US")}주
                       </p>
                       <p className="text-white font-semibold text-sm">
-                        {formatCurrency(stock.price)}
+                        {formatCurrencyValue(stock.price)}
                       </p>
-                      <p className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}>
-                        {formatPercentage(stock.change)} ({formatCurrency(stock.changeAmount)})
+                      <p
+                        className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}
+                      >
+                        {formatCurrency(stock.change)} (
+                        {formatPercentage(stock.changeAmount)})
                       </p>
                     </div>
                   </div>
@@ -548,7 +606,11 @@ const HomePage = () => {
         <div className="bg-slate-800 rounded-xl p-3">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-white text-lg font-semibold">
-              {topFilter === "rising" ? "상승률 TOP3" : topFilter === "falling" ? "하락률 TOP3" : "거래량 TOP3"}
+              {topFilter === "rising"
+                ? "상승률 TOP3"
+                : topFilter === "falling"
+                  ? "하락률 TOP3"
+                  : "거래량 TOP3"}
             </h3>
             <div className="flex gap-2">
               {["rising", "falling", "volume"].map((filter) => (
@@ -561,16 +623,23 @@ const HomePage = () => {
                       : "bg-slate-700 text-gray-200"
                   }`}
                 >
-                  {filter === "rising" ? "상승률" : filter === "falling" ? "하락률" : "거래량"}
+                  {filter === "rising"
+                    ? "상승률"
+                    : filter === "falling"
+                      ? "하락률"
+                      : "거래량"}
                 </button>
               ))}
             </div>
           </div>
-          
+
           {(isHistorical ? histLoading : stocksLoading) ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, index) => (
-                <div key={index} className="flex items-center justify-between p-2">
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2"
+                >
                   <div className="flex items-center gap-3">
                     <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
                     <div>
@@ -591,10 +660,14 @@ const HomePage = () => {
                 {isHistorical ? histError : stocksError}
               </p>
             </div>
-          ) : (isHistorical ? histTop.length === 0 : selectedRtList.length === 0) ? (
+          ) : (
+              isHistorical ? histTop.length === 0 : selectedRtList.length === 0
+            ) ? (
             <div className="text-center py-4">
               <p className="text-gray-400 text-sm">
-                {isHistorical ? "데이터를 불러올 수 없습니다" : "실시간 데이터 준비중"}
+                {isHistorical
+                  ? "데이터를 불러올 수 없습니다"
+                  : "실시간 데이터 준비중"}
               </p>
             </div>
           ) : (
@@ -603,10 +676,14 @@ const HomePage = () => {
                 <div
                   key={`trending-${stock.symbol}-${index}`}
                   className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
-                  onClick={() => navigate(`/stocks/${encodeURIComponent(String(stock.symbol || ""))}`)}
+                  onClick={() =>
+                    navigate(
+                      `/stocks/${encodeURIComponent(String(stock.symbol || ""))}`
+                    )
+                  }
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                    <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
                       <img
                         src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
                         alt={stock.name}
@@ -628,28 +705,41 @@ const HomePage = () => {
                     </div>
                   </div>
                   <div className="text-right">
+                    {/* 1줄: 가격 */}
                     <p className="text-white font-semibold text-sm">
-                      {formatCurrency(stock.price)}
+                       {formatCurrencyValue(stock.price)}
                     </p>
-                    <div className="flex items-center gap-1">
-                      <p className={`text-xs font-medium ${getColorClass(parseNumericValue(stock.change))}`}>
-                        {formatPercentage(stock.change)}
-                      </p>
-                      <p className={`text-xs ${getColorClass(parseNumericValue(stock.changePercent))}`}>
+
+                    {/* 2줄: 변동값 + 퍼센트 */}
+                    <p className="text-xs font-medium">
+                      <span
+                        className={getColorClass(
+                          parseNumericValue(stock.change)
+                        )}
+                      >
+                        {formatCurrency(stock.change)}
+                      </span>
+                      <span
+                        className={getColorClass(
+                          parseNumericValue(stock.changePercent)
+                        )}
+                      >
                         ({formatPercentage(stock.changePercent)})
+                      </span>
+                    </p>
+
+                    {/* 3줄: 거래량 */}
+                    {topFilter === "volume" && (
+                      <p className="text-xs text-gray-400">
+                        거래량: {formatVolume(stock.volume)}
                       </p>
-                      {topFilter === "volume" && (
-                        <p className="text-xs text-gray-400 ml-1">
-                          거래량: {formatVolume(stock.volume)}
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
-          
+
           <div className="mt-3 pt-3 border-t border-slate-600">
             <button
               onClick={() => navigate("/stocks")}
@@ -669,10 +759,12 @@ const HomePage = () => {
             style={{ maxHeight: "600px" }}
           >
             <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4"></div>
-            
+
             <div className="px-6 pb-4 border-b border-slate-700">
               <div className="flex items-center justify-between">
-                <h3 className="text-white text-xl font-semibold">프로필 선택</h3>
+                <h3 className="text-white text-xl font-semibold">
+                  프로필 선택
+                </h3>
                 <button
                   onClick={() => setIsProfileModalOpen(false)}
                   className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center active:scale-90 transition-transform touch-manipulation"
@@ -711,12 +803,15 @@ const HomePage = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">{profile.name}</p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        {profile.name}
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-white font-semibold text-base">
-                        {formatCurrency(profile.cashBalance)}
+                        {formatCurrencyValue(profile.cashBalance)}
                       </p>
+                      
                       <p className="text-gray-400 text-xs">총자산</p>
                     </div>
                   </div>

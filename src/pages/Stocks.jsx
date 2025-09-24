@@ -134,7 +134,7 @@ const Stocks = () => {
 				className="flex items-center justify-between p-3 bg-slate-800 rounded-xl cursor-pointer hover:bg-slate-700 transition-colors"
 			>
 				<div className="flex items-center gap-3">
-					<div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-lg overflow-hidden">
+					<div className="w-10 h-10 bg-gray-100 rounded-[5px] flex items-center justify-center text-lg overflow-hidden">
 						<img
 							src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
 							alt={stock.name}

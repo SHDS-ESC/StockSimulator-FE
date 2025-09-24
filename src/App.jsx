@@ -14,11 +14,11 @@ import StockLive from "./pages/trade/StockLive";
 import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
 import useDateStore from "@/store/useDateStore";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axiosInstance from "./util/axiosInstance";
 // CalendarForm 관련 imports
-import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -70,11 +70,13 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
       ),
     });
   }
-
+  const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+  const timelineFrom = new Date(profile.timelineFrom);
+  const timelineTo = new Date(profile.timelineTo);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
       <div className="bg-white ps-6 pe-6 pb-6 pt-4 rounded-lg shadow-lg w-[40%] max-w-md">
-        <div class="flex justify-between items-center mt-0 mb-0">
+        <div className="flex justify-between items-center mt-0 mb-0">
           <h3 className="text-lg font-semibold">날짜 선택</h3>
           <Button
             variant="ghost"
@@ -122,10 +124,20 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
                         selected={field.value}
                         onSelect={field.onChange}
                         disabled={(date) =>
-                          date > new Date() || date < new Date("1900-01-01")
+                          date > new Date() ||
+                          date < new Date("1900-01-01") || // 절대 범위
+                          date.getDay() === 0 ||
+                          date.getDay() === 6 || // 주말
+                          date < timelineFrom ||
+                          date > timelineTo
                         }
                         captionLayout="dropdown"
                       />
+                      {console.log(
+                        new Date(
+                          localStorage.getItem("newProfile").timelineFrom
+                        ) + "아아아아아아아앙"
+                      )}
                     </PopoverContent>
                   </Popover>
                   <FormDescription>
@@ -149,7 +161,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, setCurrentDate, skipNotice ,goNextTurn } = useDateStore();
+  const { isTurnOver, currentDate, skipNotice, goNextTurn } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
@@ -175,7 +187,6 @@ function App() {
       setPortfolioList(responseData); // store에 저장
       goNextTurn(selectedDate);
       setIsCalendarOpen(false);
-
     } catch (error) {
       console.error("날짜 업데이트 실패:", error);
       // 에러 발생 시 사용자에게 알림
@@ -245,22 +256,25 @@ function App() {
         {/* TurnOver 팝업 */}
         {isTurnOver && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-            <div className="bg-white rounded-2xl p-8 w-[90%] max-w-lg shadow-xl">
-              <h2 className="text-2xl font-bold mb-4">Turn Over!</h2>
-              {/* 포트폴리오 파이 차트 */}
+            <div className="bg-slate-950 rounded-2xl p-8 w-[30%] max-w-lg min-w-[280px] max-h-[80vh] overflow-y-auto shadow-xl">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => useDateStore.setState({ isTurnOver: false })}
+                  className="px-4 py-2 rounded-lg text-white"
+                >
+                  X
+                </button>
+              </div>
+              <h2 className="text-2xl font-bold mb-4 text-white text-center">
+                {currentDate} 투자 요약
+              </h2>
               <div className="mb-6">
                 <div
                   ref={chartRef}
-                  className="w-full bg-slate-700 rounded-xl overflow-hidden"
+                  className="w-full bg-slate-950 rounded-xl overflow-hidden"
                   style={{ height: "280px", width: "100%" }}
                 ></div>
               </div>
-              <button
-                onClick={() => useDateStore.setState({ isTurnOver: false })}
-                className="px-4 py-2 rounded-lg bg-slate-800 text-white"
-              >
-                닫기
-              </button>
             </div>
           </div>
         )}

@@ -146,10 +146,6 @@ export default function StockLive() {
           setPrevClose(null);
           setErr("스냅샷 데이터 없음");
           return;
-          setPrice(null);
-          setPrevClose(null);
-          setErr("스냅샷 데이터 없음");
-          return;
         }
         const cur = parseFloat(String(row.price ?? "").replace("$", ""));
         const chg = parseFloat(String(row.change ?? "").replace("+", ""));
