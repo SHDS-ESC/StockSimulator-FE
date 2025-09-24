@@ -123,46 +123,53 @@ export default function StockLive() {
     setQuantity(0);
   };
 
-  // 가격/등락률 계산: 과거는 스냅샷(/db/snapshot)과 동일 소스 사용, 실시간은 Redis
+  // 가격/등락률 계산: 과거는 DB 캔들(/db/candles)에서 "요청일 이하"만 사용해 계산, 실시간은 Redis
   useEffect(() => {
     let active = true;
 
     async function fetchHistorical() {
       if (!s || !isHistorical || !dateKey) return;
       try {
-        const resp = await axios.get("/db/snapshot", { params: { date: dateKey, symbols: s, page: 1, size: 1 } });
-        const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
-        const effectiveDate = String(resp?.data?.effectiveDate || '') || null;
-        if (effectiveDate && effectiveDate !== dateKey) {
-          showSkipNotice({ from: dateKey, to: effectiveDate, skipped: Number(resp?.data?.skippedDays || 0) });
-          setTimeout(() => clearSkipNotice(), 2500);
-          setCurrentDate(effectiveDate);
-          return;
-        }
-        const row = rows.find((r) => String(r?.symbol || "").toUpperCase() === s) || rows[0];
-        if (!row) {
+        // 요청일 이전/이하만 포함되도록 범위를 설정해 직접 계산
+        const [y, m, d] = String(dateKey).split("-").map(Number);
+        if (![y, m, d].every(Number.isFinite)) throw new Error("잘못된 날짜 형식");
+        const toEpoch = Math.floor(Date.UTC(y, m - 1, d, 23, 59, 59) / 1000);
+        const lookbackDays = 60; // 충분한 범위(주말/휴장 고려)
+        const fromEpoch = toEpoch - lookbackDays * 86400;
+
+        const res = await axiosInstance.get('/db/candles', { params: { ticker: s, from: fromEpoch, to: toEpoch } });
+        const { status, dates, closes } = res?.data || {};
+        if (status !== 'ok' || !Array.isArray(dates) || !Array.isArray(closes) || dates.length === 0) {
           if (!active) return;
           setPrice(null);
           setPrevClose(null);
-          setErr("스냅샷 데이터 없음");
-          return;
-          setPrice(null);
-          setPrevClose(null);
-          setErr("스냅샷 데이터 없음");
+          setErr('과거 캔들 데이터 없음');
           return;
         }
-        const cur = parseFloat(String(row.price ?? "").replace("$", ""));
-        const chg = parseFloat(String(row.change ?? "").replace("+", ""));
-        const prev = Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
+        // YYYY-MM-DD 문자열과 종가 매핑 후 요청일 이하만 필터
+        const pairs = dates.map((dt, i) => ({ dt: String(dt), close: Number(closes[i]) }))
+          .filter(v => v.dt && Number.isFinite(v.close))
+          .filter(v => v.dt <= dateKey)
+          .sort((a, b) => (a.dt < b.dt ? -1 : a.dt > b.dt ? 1 : 0));
+
+        if (pairs.length === 0) {
+          if (!active) return;
+          setPrice(null);
+          setPrevClose(null);
+          setErr('요청일 이전 데이터 없음');
+          return;
+        }
+        const last = pairs[pairs.length - 1];
+        const prev = pairs.length >= 2 ? pairs[pairs.length - 2] : null;
         if (!active) return;
-        setPrice(Number.isFinite(cur) ? cur : null);
-        setPrevClose(Number.isFinite(prev) ? prev : null);
+        setPrice(Number(last.close));
+        setPrevClose(prev ? Number(prev.close) : null);
         setErr(null);
       } catch (_) {
         if (!active) return;
         setPrice(null);
         setPrevClose(null);
-        setErr("스냅샷에서 가격을 불러오지 못했습니다.");
+        setErr("과거 가격을 불러오지 못했습니다.");
       }
     }
 
