@@ -62,11 +62,13 @@ export const Header = ({onClick}) => {
             // ignore, fall back to nextKey
         }
 
+        // 서버에 유효 거래일로 업데이트
+        const effectiveDateObj = new Date(effectiveKey);
         const response = await axiosInstance.post(
             "/userprofile/update/process-date",
             {
                 userProfileId: lastProfileId,
-                processDate: format(currentDateObj, "yyyy-MM-dd"),
+                processDate: format(effectiveDateObj, "yyyy-MM-dd"),
             },
             { withCredentials: true }
         );
@@ -78,7 +80,8 @@ export const Header = ({onClick}) => {
         }));
 
         setPortfolioList(responseData); // store에 저장
-        goNextTurn(currentDateObj);
+        // 전역 날짜도 유효 거래일로 진행
+        goNextTurn(effectiveDateObj);
       };
 
       
