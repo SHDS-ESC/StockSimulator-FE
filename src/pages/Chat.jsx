@@ -101,6 +101,101 @@ const Tooltip = ({ children, content }) => {
   );
 };
 
+// Lightweight Charts 로더 (예측 차트용)
+function loadLW() {
+  return new Promise((resolve) => {
+    if (window.LightweightCharts) return resolve(window.LightweightCharts);
+    const existing = document.getElementById("lightweight-charts-umd");
+    if (!existing) {
+      const script = document.createElement("script");
+      script.id = "lightweight-charts-umd";
+      script.src = "https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js";
+      script.async = true;
+      script.onload = () => resolve(window.LightweightCharts);
+      document.body.appendChild(script);
+    } else {
+      const timer = setInterval(() => {
+        if (window.LightweightCharts) {
+          clearInterval(timer);
+          resolve(window.LightweightCharts);
+        }
+      }, 50);
+    }
+  });
+}
+
+// 예측 라인 차트 컴포넌트
+const PredictionChart = ({ baseDate, lastPrice, dates = [], prices = [] }) => {
+  const containerRef = useRef(null);
+
+  const parseYmd = (ymd) => {
+    if (!ymd || typeof ymd !== 'string') return null;
+    const [yy, mm, dd] = ymd.split('-').map(Number);
+    if ([yy, mm, dd].every(Number.isFinite)) return { year: yy, month: mm, day: dd };
+    return null;
+  };
+
+  useEffect(() => {
+    let chart = null;
+    let series = null;
+    let active = true;
+    if (!containerRef.current) return () => {};
+
+    const init = async () => {
+      const LW = await loadLW();
+      if (!active || !LW || !containerRef.current) return;
+
+      chart = LW.createChart(containerRef.current, {
+        width: containerRef.current.clientWidth,
+        height: 260,
+        layout: { background: { color: '#0f172a' }, textColor: '#cbd5e1' },
+        rightPriceScale: { borderVisible: false },
+        timeScale: { timeVisible: true, secondsVisible: false },
+        grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+        crosshair: { mode: LW.CrosshairMode.Normal }
+      });
+      series = chart.addLineSeries({ color: '#22c55e', lineWidth: 2 });
+
+      const data = [];
+      const baseTime = parseYmd(baseDate);
+      const baseVal = Number(lastPrice);
+      if (baseTime && Number.isFinite(baseVal)) {
+        data.push({ time: baseTime, value: baseVal });
+      }
+      if (Array.isArray(dates) && Array.isArray(prices)) {
+        for (let i = 0; i < dates.length; i++) {
+          const t = parseYmd(dates[i]);
+          const v = Number(prices[i]);
+          if (t && Number.isFinite(v)) data.push({ time: t, value: v });
+        }
+      }
+      try { series.setData(data); } catch (_) {}
+      try { chart.timeScale().fitContent(); } catch (_) {}
+
+      const onResize = () => {
+        if (!containerRef.current || !chart) return;
+        chart.applyOptions({ width: containerRef.current.clientWidth });
+      };
+      window.addEventListener('resize', onResize);
+      return () => { window.removeEventListener('resize', onResize); };
+    };
+
+    let cleanup;
+    init().then((fn) => { cleanup = fn; });
+    return () => {
+      active = false;
+      if (typeof cleanup === 'function') cleanup();
+      try { chart && chart.remove(); } catch (_) {}
+    };
+  }, [baseDate, lastPrice, dates, prices]);
+
+  return (
+    <div>
+      <div ref={containerRef} style={{ width: '100%', height: 260 }} />
+    </div>
+  );
+};
+
 const Chat = () => {
   const [activeTab, setActiveTab] = useState("analysis");
   const { email, lastProfileId } = useLoginStore();
@@ -139,7 +234,7 @@ const Chat = () => {
     setSimulation(prev => ({ ...prev, today: todayStr, loading: true, error: null }));
     
     try {
-      const response = await axiosInstance.post('http://localhost:8090/dev/agent/predict-sample', {
+      const response = await axiosInstance.post('http://localhost:8090/dev/agent/predict', {
         ticker: simulation.ticker,
         today: todayStr,
         train_days: simulation.trainDays,
@@ -862,6 +957,15 @@ const Chat = () => {
               {simulation.result?.prediction_dates && simulation.result.prediction_dates.length > 0 && (
                 <div className="bg-slate-700 rounded-lg p-4">
                   <div className="text-sm font-medium text-white mb-3">예측 요약</div>
+                  {/* 예측 라인 차트 */}
+                  <div className="mb-4 bg-slate-800 rounded-md p-2">
+                    <PredictionChart
+                      baseDate={simulation.today}
+                      lastPrice={simulation.result?.last_price}
+                      dates={simulation.result?.prediction_dates}
+                      prices={simulation.result?.price_predictions}
+                    />
+                  </div>
                   <div className="grid grid-cols-3 gap-3 text-xs">
                     <div className="bg-slate-600 rounded p-3 text-center">
                       <div className="text-gray-400 mb-1">시작가</div>

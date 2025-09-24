@@ -276,6 +276,7 @@ export default function StockLive() {
         defaultMode={isHistorical ? "historical" : "realtime"}
         lockedMode={isHistorical ? "historical" : "realtime"}
         hideModeToggle={true}
+        theme="dark"
         initialYear={simDate?.year || undefined}
         initialMonth={simDate?.month || undefined}
         initialDay={simDate?.day || undefined}

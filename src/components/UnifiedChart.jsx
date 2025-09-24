@@ -25,7 +25,7 @@ function loadLightweightCharts() {
 }
 
 // -------- Historical Chart --------
-function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, initialDay, autoLoad = false }) {
+function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, initialDay, autoLoad = false, theme = 'light' }) {
   const containerRef = useRef(null);
   const rsiContainerRef = useRef(null);
   const volContainerRef = useRef(null);
@@ -252,16 +252,22 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
           : '';
       };
 
+      const isDark = theme === 'dark';
+      const baseBg = isDark ? '#0f172a' : 'white';
+      const baseText = isDark ? '#cbd5e1' : '#333';
+      const gridColor = isDark ? '#1e293b' : '#f6f6f6';
+      const gridVert = isDark ? '#233046' : '#eee';
+
       localChart = LW.createChart(containerRef.current, {
         width: containerRef.current.clientWidth,
         height: CANDLE_HEIGHT,
-        layout: { background: { color: "white" }, textColor: "#333" },
+        layout: { background: { color: baseBg }, textColor: baseText },
         crosshair: { mode: LW.CrosshairMode.Normal },
         timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: kstTimeFormatter },
         localization: { locale: 'ko-KR', timeFormatter: kstTimeFormatter },
         rightPriceScale: { borderVisible: false },
         leftPriceScale: { visible: true, borderVisible: false },
-        grid: { vertLines: { color: "#eee" }, horzLines: { color: "#f6f6f6" } },
+        grid: { vertLines: { color: gridVert }, horzLines: { color: gridColor } },
       });
       const candleSeries = localChart.addCandlestickSeries({
         upColor: '#26a69a', downColor: '#ef5350',
@@ -279,10 +285,10 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
         const localVolChart = LW.createChart(volContainerRef.current, {
           width: volContainerRef.current.clientWidth,
           height: VOLUME_HEIGHT,
-          layout: { background: { color: 'white' }, textColor: '#333' },
+          layout: { background: { color: baseBg }, textColor: baseText },
           rightPriceScale: { borderVisible: false },
           leftPriceScale: { visible: false },
-          grid: { vertLines: { color: '#eee' }, horzLines: { color: '#f6f6f6' } },
+          grid: { vertLines: { color: gridVert }, horzLines: { color: gridColor } },
           timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: kstTimeFormatter },
           localization: { locale: 'ko-KR', timeFormatter: kstTimeFormatter },
         });
@@ -301,10 +307,10 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
         const localRsiChart = LW.createChart(rsiContainerRef.current, {
           width: rsiContainerRef.current.clientWidth,
           height: RSI_HEIGHT,
-          layout: { background: { color: 'white' }, textColor: '#333' },
+          layout: { background: { color: baseBg }, textColor: baseText },
           rightPriceScale: { borderVisible: false },
           leftPriceScale: { visible: false },
-          grid: { vertLines: { color: '#eee' }, horzLines: { color: '#f6f6f6' } },
+          grid: { vertLines: { color: gridVert }, horzLines: { color: gridColor } },
           timeScale: { timeVisible: true, secondsVisible: false, tickMarkFormatter: kstTimeFormatter },
           localization: { locale: 'ko-KR', timeFormatter: kstTimeFormatter },
         });
@@ -513,7 +519,7 @@ export function TradeRealtimeWidget({ symbol, theme = "light", autosize = true, 
 }
 
 // -------- Unified Wrapper --------
-export default function UnifiedChart({ symbol, defaultMode = "historical", initialYear, initialMonth, initialDay, onCandlesLoaded, autoLoad, hideModeToggle = false, lockedMode }) {
+export default function UnifiedChart({ symbol, defaultMode = "historical", initialYear, initialMonth, initialDay, onCandlesLoaded, autoLoad, hideModeToggle = false, lockedMode, theme = 'light' }) {
   const [mode, setMode] = useState(defaultMode);
   const effectiveMode = lockedMode || mode;
   const isHistorical = effectiveMode === "historical";
@@ -538,6 +544,7 @@ export default function UnifiedChart({ symbol, defaultMode = "historical", initi
         initialMonth={initialMonth}
         initialDay={initialDay}
         autoLoad={autoLoad}
+        theme={theme}
       />
     </div>
   );
