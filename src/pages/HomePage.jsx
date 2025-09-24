@@ -411,9 +411,8 @@ const HomePage = () => {
                 <p
                   className={`text-xs ${diffPrice > 0 ? "text-red-500" : "text-blue-400"}`}
                 >
-                  {diffPrice > 0 ? "+" : ""}
-                  {diffPercent}% ({diffPrice > 0 ? "+" : ""}
-                  {diffPrice}$)
+                  {diffPrice > 0 ? "+" : ""}${diffPrice} ({diffPrice > 0 ? "+" : ""}
+                  {diffPercent}%)
                 </p>
               );
             })()}
@@ -434,19 +433,9 @@ const HomePage = () => {
                   : "text-blue-400"
               }`}
             >
-              {((selectedProfile.totalInvested - startInvested) /
-                startInvested) *
-                100 >
-              0
-                ? "+"
-                : ""}
-              {(
-                ((selectedProfile.totalInvested - startInvested) /
-                  startInvested) *
-                100
-              ).toFixed(2)}
-              % ({selectedProfile.totalInvested - startInvested > 0 ? "+" : ""}
-              {(selectedProfile.totalInvested - startInvested).toFixed(2)}$ )
+              {((selectedProfile.totalInvested - startInvested) /startInvested) *100 >0 ? "+": ""}
+              ${(selectedProfile.totalInvested - startInvested).toFixed(2)} ({selectedProfile.totalInvested - startInvested > 0 ? "+" : ""}
+              {(((selectedProfile.totalInvested - startInvested) /startInvested) *100).toFixed(2)}%)
             </p>
           </div>
           <div>
