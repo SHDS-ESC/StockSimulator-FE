@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import useLoginStore from "@/store/useLoginStore";
+import useDateStore from "@/store/useDateStore";
 import axiosInstance from "@/util/axiosInstance";
 
 // 툴팁 컴포넌트
@@ -103,11 +104,19 @@ const Tooltip = ({ children, content }) => {
 const Chat = () => {
   const [activeTab, setActiveTab] = useState("analysis");
   const { email, lastProfileId } = useLoginStore();
+  const { currentDate } = useDateStore();
+  const formatDateKey = (v) => {
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (typeof v === 'string' && v.length >= 10) return v.slice(0, 10);
+    const d = new Date(v || Date.now());
+    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    return new Date().toISOString().slice(0, 10);
+  };
   
   // 시뮬레이션 상태 관리
   const [simulation, setSimulation] = useState({
     ticker: "AAPL",
-    today: new Date().toISOString().split('T')[0],
+    today: formatDateKey(currentDate || new Date()),
     trainDays: 110,
     predictSteps: 3,
     loading: false,
@@ -115,17 +124,24 @@ const Chat = () => {
     error: null
   });
 
+  // 프로필 진행 날짜 변경 시 기준 날짜 동기화
+  useEffect(() => {
+    setSimulation((prev) => ({ ...prev, today: formatDateKey(currentDate || new Date()) }));
+  }, [currentDate]);
+
   // 모달 상태 관리
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // API 호출 함수
   const handleSimulationSubmit = async () => {
-    setSimulation(prev => ({ ...prev, loading: true, error: null }));
+    // 기준 날짜를 현재 프로필의 진행 날짜로 설정
+    const todayStr = formatDateKey(currentDate || new Date());
+    setSimulation(prev => ({ ...prev, today: todayStr, loading: true, error: null }));
     
     try {
       const response = await axiosInstance.post('http://localhost:8090/dev/agent/predict-sample', {
         ticker: simulation.ticker,
-        today: simulation.today,
+        today: todayStr,
         train_days: simulation.trainDays,
         predict_steps: simulation.predictSteps
       });
@@ -423,9 +439,10 @@ const Chat = () => {
                       <input
                         type="date"
                         value={simulation.today}
-                        onChange={(e) => handleSimulationChange('today', e.target.value)}
-                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
+                        disabled
+                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white opacity-70 cursor-not-allowed"
                       />
+                      <p className="text-[10px] text-gray-400 mt-1">AI 예측 실행 시 오늘 날짜로 자동 설정됩니다.</p>
                     </div>
                     
                     {/* 학습 기간과 예측 일수 */}
