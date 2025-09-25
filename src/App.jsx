@@ -6,10 +6,10 @@ import News from "./pages/News";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyPage from "./pages/Mypage";
+import OrderHistory from "./pages/OrderHistory";
 import { Header, Footer } from "./components/layout/Layout";
 import AnimatedBackground from "./components/AnimatedBackground";
 import "./index.css";
-import TradePage from "./pages/trade/TradePage";
 import StockLive from "./pages/trade/StockLive";
 import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
@@ -157,7 +157,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, skipNotice, goNextTurn } = useDateStore();
+  const { isTurnOver, currentDate, setCurrentDate, skipNotice, goNextTurn } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
@@ -366,7 +366,6 @@ useEffect(() => {
         <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative pt-16 pb-5">
           <Routes>
             <Route path="/" element={<Login />} />
-            <Route path="/trade" element={<TradePage />} />
             <Route path="/stocks/:symbol" element={<StockLive />} />
             <Route path="/stocks/live/:symbol" element={<StockLive />} />
             <Route path="/home" element={<HomePage />} />
@@ -375,6 +374,7 @@ useEffect(() => {
             <Route path="/news" element={<News />} />
             <Route path="/register" element={<Register />} />
             <Route path="/mypage" element={<MyPage />} />
+            <Route path="/orderhistory" element={<OrderHistory />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/redis-test" element={<RedisTest />} />
           </Routes>

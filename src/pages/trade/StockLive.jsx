@@ -6,6 +6,7 @@ import axiosInstance from "../../util/axiosInstance";
 import { Button } from "@/components/ui/button";
 import useDateStore from "@/store/useDateStore";
 import useLoginStore from "@/store/useLoginStore";
+import { HelpCircle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -117,48 +118,61 @@ export default function StockLive() {
   }, [price, prevClose]);
 
   const [showModal, setShowModal] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [guideTab, setGuideTab] = useState('ma');
 
   const handleModalClosed = () => {
     setShowModal(false);
     setQuantity(0);
   };
 
-  // 가격/등락률 계산: 과거는 스냅샷(/db/snapshot)과 동일 소스 사용, 실시간은 Redis
+  // 가격/등락률 계산: 과거는 DB 캔들(/db/candles)에서 "요청일 이하"만 사용해 계산, 실시간은 Redis
   useEffect(() => {
     let active = true;
 
     async function fetchHistorical() {
       if (!s || !isHistorical || !dateKey) return;
       try {
-        const resp = await axios.get("/db/snapshot", { params: { date: dateKey, symbols: s, page: 1, size: 1 } });
-        const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
-        const effectiveDate = String(resp?.data?.effectiveDate || '') || null;
-        if (effectiveDate && effectiveDate !== dateKey) {
-          showSkipNotice({ from: dateKey, to: effectiveDate, skipped: Number(resp?.data?.skippedDays || 0) });
-          setTimeout(() => clearSkipNotice(), 2500);
-          setCurrentDate(effectiveDate);
-          return;
-        }
-        const row = rows.find((r) => String(r?.symbol || "").toUpperCase() === s) || rows[0];
-        if (!row) {
+        // 요청일 이전/이하만 포함되도록 범위를 설정해 직접 계산
+        const [y, m, d] = String(dateKey).split("-").map(Number);
+        if (![y, m, d].every(Number.isFinite)) throw new Error("잘못된 날짜 형식");
+        const toEpoch = Math.floor(Date.UTC(y, m - 1, d, 23, 59, 59) / 1000);
+        const lookbackDays = 60; // 충분한 범위(주말/휴장 고려)
+        const fromEpoch = toEpoch - lookbackDays * 86400;
+
+        const res = await axiosInstance.get('/db/candles', { params: { ticker: s, from: fromEpoch, to: toEpoch } });
+        const { status, dates, closes } = res?.data || {};
+        if (status !== 'ok' || !Array.isArray(dates) || !Array.isArray(closes) || dates.length === 0) {
           if (!active) return;
           setPrice(null);
           setPrevClose(null);
-          setErr("스냅샷 데이터 없음");
+          setErr('과거 캔들 데이터 없음');
           return;
         }
-        const cur = parseFloat(String(row.price ?? "").replace("$", ""));
-        const chg = parseFloat(String(row.change ?? "").replace("+", ""));
-        const prev = Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
+        // YYYY-MM-DD 문자열과 종가 매핑 후 요청일 이하만 필터
+        const pairs = dates.map((dt, i) => ({ dt: String(dt), close: Number(closes[i]) }))
+          .filter(v => v.dt && Number.isFinite(v.close))
+          .filter(v => v.dt <= dateKey)
+          .sort((a, b) => (a.dt < b.dt ? -1 : a.dt > b.dt ? 1 : 0));
+
+        if (pairs.length === 0) {
+          if (!active) return;
+          setPrice(null);
+          setPrevClose(null);
+          setErr('요청일 이전 데이터 없음');
+          return;
+        }
+        const last = pairs[pairs.length - 1];
+        const prev = pairs.length >= 2 ? pairs[pairs.length - 2] : null;
         if (!active) return;
-        setPrice(Number.isFinite(cur) ? cur : null);
-        setPrevClose(Number.isFinite(prev) ? prev : null);
+        setPrice(Number(last.close));
+        setPrevClose(prev ? Number(prev.close) : null);
         setErr(null);
       } catch (_) {
         if (!active) return;
         setPrice(null);
         setPrevClose(null);
-        setErr("스냅샷에서 가격을 불러오지 못했습니다.");
+        setErr("과거 가격을 불러오지 못했습니다.");
       }
     }
 
@@ -243,27 +257,42 @@ export default function StockLive() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div
           className="row"
-          style={{ justifyContent: "space-between", width: "100%" }}
+          style={{ justifyContent: "space-between", width: "100%", alignItems: "center", flexWrap: "nowrap" }}
         >
-          <strong style={{ fontSize: 18 }}>{s || "LIVE"}</strong>
-          <button className="btn" onClick={() => navigate(-1)}>
+          <strong style={{ fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "60%" }}>{s || "LIVE"}</strong>
+          <button className="btn" onClick={() => navigate(-1)} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
             뒤로
           </button>
         </div>
       </div>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="row" style={{ gap: 12 }}>
-          <span className="muted">현재가</span>
-          <strong>
-            {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
-          </strong>
-          <span className="muted">전일대비</span>
-          <span style={{ color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350" }}>
-            {Number.isFinite(Number(change))
-              ? `${change.toFixed(2)} (${Number(changePct).toFixed(2)}%)`
-              : "-"}
-          </span>
-          {err && <span className="muted">{err}</span>}
+        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "nowrap", justifyContent: "space-between" }}>
+          <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "nowrap" }}>
+            <span className="muted" style={{ whiteSpace: "nowrap" }}>현재가</span>
+            <strong style={{ whiteSpace: "nowrap" }}>
+              {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
+            </strong>
+            <span style={{
+              color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350",
+              whiteSpace: "nowrap",
+              fontSize: "14px"
+            }}>
+              {Number.isFinite(Number(change))
+                ? `${(change ?? 0) >= 0 ? '+' : ''}${change.toFixed(2)} (${Number(changePct).toFixed(2)}%)`
+                : "-"}
+            </span>
+            {err && <span className="muted" style={{ fontSize: "12px" }}>{err}</span>}
+          </div>
+
+          <button
+            onClick={() => setShowGuide(true)}
+            title="지표 가이드"
+            className="px-2.5 py-1.5 text-xs rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-white inline-flex items-center gap-1.5"
+            style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+          >
+            <HelpCircle size={14} />
+            <span>지표 가이드</span>
+          </button>
         </div>
       </div>
       {/* 주문 UI는 차트/보조지표 아래로 이동 */}
@@ -272,6 +301,7 @@ export default function StockLive() {
         defaultMode={isHistorical ? "historical" : "realtime"}
         lockedMode={isHistorical ? "historical" : "realtime"}
         hideModeToggle={true}
+        theme="dark"
         initialYear={simDate?.year || undefined}
         initialMonth={simDate?.month || undefined}
         initialDay={simDate?.day || undefined}
@@ -330,6 +360,105 @@ export default function StockLive() {
             <Button className="w-full mt-4" onClick={() => setShowModal(false)}>
               확인
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 지표 가이드 모달 */}
+      <Dialog open={showGuide} onOpenChange={setShowGuide}>
+        <DialogContent className="sm:max-w-lg bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">보조 지표 가이드</DialogTitle>
+          </DialogHeader>
+
+          {/* 탭 네비게이션 */}
+          <div className="flex space-x-1 bg-slate-900 rounded-lg p-1">
+            {[
+              { id: 'ma', name: '이평선' },
+              { id: 'volume', name: '거래량' },
+              { id: 'rsi', name: 'RSI' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setGuideTab(tab.id)}
+                className={`flex-1 px-3 py-2 text-xs rounded-md transition-colors ${
+                  guideTab === tab.id
+                    ? 'bg-slate-700 text-white font-medium'
+                    : 'text-gray-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {tab.name}
+              </button>
+            ))}
+          </div>
+
+          {/* 탭 콘텐츠 */}
+          <div className="text-[13px] leading-6 min-h-[200px]">
+            {guideTab === 'ma' && (
+              <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-2">이동평균선(MA20/50/200)</h4>
+                <p className="text-gray-300 mb-3">
+                  단기·중기·장기 추세 지표. 단기선↑ 장기선 돌파는 골든크로스(상승), 하향 돌파는 데드크로스(하락)로 해석합니다.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-400 text-xs">•</span>
+                    <span className="text-gray-300">가격이 MA20 상방: 단기 모멘텀</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-purple-400 text-xs">•</span>
+                    <span className="text-gray-300">정배열(20&gt;50&gt;200): 추세 추종 유리</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-orange-400 text-xs">•</span>
+                    <span className="text-gray-300">이격 과도: 되돌림 리스크 주의</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {guideTab === 'volume' && (
+              <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-2">거래량</h4>
+                <p className="text-gray-300 mb-3">
+                  추세 신뢰도 보강. 방향성과 함께 증가한 거래량은 신호의 질을 높여줍니다.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-green-400 text-xs">📈</span>
+                    <span className="text-gray-300">돌파 + 거래량 급증: 지속 가능성 ↑</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-yellow-400 text-xs">📊</span>
+                    <span className="text-gray-300">반등/반락 + 거래량 감소: 일시적 되돌림</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {guideTab === 'rsi' && (
+              <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-2">RSI(14)</h4>
+                <p className="text-gray-300 mb-3">
+                  70↑ 과매수, 30↓ 과매도. 강한 상승장에서는 70 이상이 계속 유지될 수 있으니, 주가는 오르는데 RSI가 떨어지는 '힘 빠짐 신호'를 주의깊게 봐야 합니다.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-green-400 text-xs">30</span>
+                    <span className="text-gray-300">30 이하 → 상향 이탈: 반등 신호</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400 text-xs">70</span>
+                    <span className="text-gray-300">70 이상 → 하향 이탈: 조정 신호</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+
+          <DialogFooter>
+            <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white" onClick={() => setShowGuide(false)}>닫기</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

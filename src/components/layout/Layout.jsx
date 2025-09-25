@@ -85,7 +85,7 @@ export const Header = ({ onClick, onTurnOverData,toggleCalendar  }) => {
     // ignore, fall back to nextKey
   }
 
-    
+
   // 서버에 유효 거래일로 업데이트
   const effectiveDateObj = new Date(effectiveKey);
   const response = await axiosInstance.post(
@@ -116,10 +116,6 @@ export const Header = ({ onClick, onTurnOverData,toggleCalendar  }) => {
     setPortfolioList(responseData);
     goNextTurn(effectiveDateObj);
 
-    setPortfolioList(responseData);
-goNextTurn(effectiveDateObj);
-
-};
 
   function getRandomColor() {
     return (
@@ -181,7 +177,6 @@ goNextTurn(effectiveDateObj);
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
-
           <button
             onClick={onClick}
             className="text-white w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"

@@ -116,10 +116,16 @@ const Stocks = () => {
             const isUp = changeText.startsWith('+');
             return { priceText, changeText, changePctText, isUp };
         }
-        const priceText = (String(stock.price).startsWith('$') ? String(stock.price) : `$${String(stock.price)}`);
-        const changeText = String(stock.change ?? '');
-        const changePctText = String(stock.changePercent ?? '');
-        const isUp = String(stock.change ?? '').includes("+");
+        // 실시간: 상세 페이지와 동일 계산식 적용
+        const cur = parseFloat(String(stock?.price ?? '').replace('$',''));
+        const chg = parseFloat(String(stock?.change ?? '').replace('+',''));
+        const prev = (Number.isFinite(cur) && Number.isFinite(chg)) ? (cur - chg) : null;
+        const pct = (Number.isFinite(prev) && prev !== 0) ? ((cur / prev - 1) * 100) : null;
+
+        const priceText = Number.isFinite(cur) ? `$${cur.toFixed(2)}` : '-';
+        const changeText = Number.isFinite(chg) ? `${chg >= 0 ? '+' : ''}${chg.toFixed(2)}` : '-';
+        const changePctText = Number.isFinite(pct) ? `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%` : '-';
+        const isUp = Number.isFinite(chg) ? (chg >= 0) : false;
         return { priceText, changeText, changePctText, isUp };
     };
 

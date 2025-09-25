@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight,
@@ -7,7 +7,6 @@ import {
   BarChart3,
   TrendingUp,
   LogIn,
-  LogOut,
 } from "lucide-react";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
@@ -135,8 +134,6 @@ const HomePage = () => {
     stocks,
     loading: stocksLoading,
     error: stocksError,
-    lastUpdate,
-    isUpdating,
   } = useRealtimeStocks({ enabled: true });
 
   // 타임라인 기반 과거 모드 여부 판별
@@ -239,7 +236,7 @@ const HomePage = () => {
           ...prev,
           [dateKey]: { ...(prev[dateKey] || {}), [topFilter]: rows },
         }));
-      } catch (_) {
+      } catch {
         setHistTop([]);
         setHistError("과거 데이터 계산 실패");
       } finally {
@@ -250,39 +247,46 @@ const HomePage = () => {
   }, [isHistorical, dateKey, topFilter, histCache]);
 
   useConfirmLogin(null);
-
-  const loadProfile = async () => {
-    try {
-      const list = await fetchProfiles();
-      const totalCurrentPrice = await fetchStocks();
-
-      if (lastProfileId && Number(lastProfileId) > 0) {
+    // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
+    const loadProfile = useCallback(async () => {
         try {
-          const response = await axiosInstance.get(
-            `userprofile/profile/${lastProfileId}`,
-            { withCredentials: true }
-          );
-          setStartInvested(response.data.totalInvested || 0);
-          setSelectedProfile({
-            ...response.data,
-            totalInvested: totalCurrentPrice || 0,
-          });
-          localStorage.setItem("newProfile", JSON.stringify(response.data));
-          setCurrentDate(response.data.processDate);
-        } catch (e) {
-          console.error("Error fetching active profile:", e);
-          if (Array.isArray(list) && list.length > 0)
-            setSelectedProfile(list[0]);
+            const list = await fetchProfiles();
+            const totalCurrentPrice = await fetchStocks();
+            // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
+            if (lastProfileId && Number(lastProfileId) > 0) {
+                try {
+                    const response = await axiosInstance.get(
+                        `userprofile/profile/${lastProfileId}`,
+                        { withCredentials: true }
+                    );
+                    setStartInvested(response.data.totalInvested || 0);
+                    setSelectedProfile({
+                        ...response.data,
+                        totalInvested: totalCurrentPrice || 0,
+                    });
+                    localStorage.setItem("newProfile", JSON.stringify(response.data));
+                    setCurrentDate(response.data.processDate);
+                } catch(e) {
+                    console.error("Error fetching active profile:", e);
+                    if (Array.isArray(list) && list.length > 0)
+                        setSelectedProfile(list[0]);
+                }
+            } else if (Array.isArray(list) && list.length > 0) {
+                setSelectedProfile(list[0]);
+            }
+        } catch (error) {
+            console.error("Error loading profiles:", error);
         }
-      } else if (Array.isArray(list) && list.length > 0) {
-        setSelectedProfile(list[0]);
-      }
-    } catch (error) {
-      console.error("Error loading profiles:", error);
-    }
-  };
+    }, [
+        lastProfileId,
+        fetchProfiles,
+        fetchStocks,
+        setCurrentDate,
+        startInvested,
+    ]);
 
-  const fetchProfiles = async () => {
+  // 모든 프로필 불러오기
+  const fetchProfiles = useCallback(async () => {
     if (!email || String(email).trim() === "") return [];
     try {
       const response = await axiosInstance.get(
@@ -296,10 +300,10 @@ const HomePage = () => {
       console.error("Error fetching profiles:", error);
       return [];
     }
-  };
+  }, [email]);
 
-  const fetchStocks = async () => {
-    if (!email || String(email).trim() === "") return 0;
+    const fetchStocks = useCallback(async () => {
+        if (!email || String(email).trim() === "") return 0;
     const isoDate =
       currentDate instanceof Date
         ? currentDate.toISOString().slice(0, 10)
@@ -316,12 +320,14 @@ const HomePage = () => {
       console.error("Error fetching stocks:", error);
       return 0;
     }
-  };
+  }, [email, lastProfileId, currentDate]);
+
+
 
   useEffect(() => {
     if (!email || String(email).trim() === "") return;
     loadProfile();
-  }, [email, lastProfileId, currentDate]);
+  }, [email, lastProfileId, currentDate, loadProfile]);
 
   const handleProfileSelect = (profile) => {
     axiosInstance
@@ -337,7 +343,7 @@ const HomePage = () => {
         try {
           localStorage.setItem("newProfile", JSON.stringify(profile));
           if (profile?.processDate) setCurrentDate(profile.processDate);
-        } catch (_) {
+        } catch {
           /* ignore */
         }
         setTimeout(() => setIsProfileModalOpen(false), 200);
@@ -347,39 +353,78 @@ const HomePage = () => {
   // TOP3 주식 계산
   const topRisingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(
+        String(val || "")
+          .replace("%", "")
+          .replace("+", "")
+      );
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    const toPrice = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
     return stocks
-      .filter(
-        (s) => s.changePercent && parseNumericValue(s.changePercent) !== 0
-      )
-      .sort(
-        (a, b) =>
-          parseNumericValue(b.changePercent) -
-          parseNumericValue(a.changePercent)
-      )
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+      }))
+      .filter((s) => toPrice(s.price) >= 1)
+      .filter((s) => s.changePercent && toPct(s.changePercent) !== -Infinity)
+      .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
       .slice(0, 3);
   }, [stocks]);
 
+  // 하락률 상위(절대값 기준 하락 큰 것) 3개
   const topFallingStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(
+        String(val || "")
+          .replace("%", "")
+          .replace("+", "")
+      );
+      return Number.isFinite(n) ? n : Infinity;
+    };
+    const toPrice = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
     return stocks
-      .filter(
-        (s) => s.changePercent && parseNumericValue(s.changePercent) !== 0
-      )
-      .sort(
-        (a, b) =>
-          parseNumericValue(a.changePercent) -
-          parseNumericValue(b.changePercent)
-      )
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+      }))
+      .filter((s) => toPrice(s.price) >= 1)
+      .filter((s) => s.changePercent && toPct(s.changePercent) !== Infinity)
+      .sort((a, b) => toPct(a.changePercent) - toPct(b.changePercent))
       .slice(0, 3);
   }, [stocks]);
 
   const topVolumeStocks = useMemo(() => {
     if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toNum = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
     return stocks
-      .sort((a, b) => parseNumericValue(b.volume) - parseNumericValue(a.volume))
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+        volume: String(s?.volume ?? "0"),
+      }))
+      .sort((a, b) => toNum(b.volume) - toNum(a.volume))
       .slice(0, 3);
   }, [stocks]);
 
+  // 실시간 모드에서 선택된 TOP3 리스트
   const selectedRtList = useMemo(() => {
     switch (topFilter) {
       case "falling":
@@ -413,20 +458,29 @@ const HomePage = () => {
 
   return (
     <div className="h-full pt-5 pb-10">
+      {/* 전체 콘텐츠 영역 */}
+
+      {/* 자산 정보 섹션 (다크 배경) */}
+      <div className="bg-slate-950 mx-4 rounded-xl p-1 mb-4">
+        {/* 프로필명 */}
+        <div className="mb-4">
+          <div
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => setIsProfileModalOpen(true)}
+          >
+            <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
+            <h2 className="text-white text-lg font-semibold">
+              {selectedProfile?.nickname}
+            </h2>
+            <span className="text-gray-400 text-sm">
+              {selectedProfile
+                ? "TimeLine : " + selectedProfile.name
+                : "TimeLine : 없음"}
+            </span>
+          </div>
+        </div>
       {/* 커스텀 CSS 스타일 추가 */}
       <style jsx>{shimmerStyles}</style>
-
-      {/* 상단 로그인/로그아웃 액션 */}
-      <div className="px-4 mb-3 flex gap-2">
-        {sessionStorage.getItem("accessToken") ? (
-          <button
-            onClick={handleLogout}
-            className="px-3 py-2 rounded-lg bg-slate-800 text-white flex items-center gap-2"
-          >
-            <LogOut size={16} /> 로그아웃
-          </button>
-        ) : null}
-      </div>
 
       {/* 자산 정보 섹션 */}
       <div className="bg-slate-950 mx-4 rounded-xl mb-5">
@@ -520,11 +574,14 @@ const HomePage = () => {
               </div>
             </div>
 
-            {/* 주문 내역 */}
-            <div className="flex items-center justify-between">
-              <span className="text-white text-sm">주문 내역</span>
-              <ChevronRight className="w-4 h-4 text-white" />
-            </div>
+        {/* 주문 내역 */}
+        <div
+          className="flex items-center justify-between cursor-pointer hover:bg-slate-700 rounded-lg p-2 transition-colors"
+          onClick={() => navigate("/orderhistory")}
+        >
+          <span className="text-white text-sm">주문 내역</span>
+          <ChevronRight className="w-4 h-4 text-white" />
+        </div>
           </>
         )}
       </div>
@@ -623,23 +680,36 @@ const HomePage = () => {
                   : "거래량 TOP3"}
             </h3>
             <div className="flex gap-2">
-              {["rising", "falling", "volume"].map((filter) => (
-                <button
-                  key={filter}
-                  onClick={() => setTopFilter(filter)}
-                  className={`px-2 py-1 rounded-md text-xs font-medium ${
-                    topFilter === filter
-                      ? "bg-red-500 text-white"
-                      : "bg-slate-700 text-gray-200"
-                  }`}
-                >
-                  {filter === "rising"
-                    ? "상승률"
-                    : filter === "falling"
-                      ? "하락률"
-                      : "거래량"}
-                </button>
-              ))}
+              <button
+                onClick={() => setTopFilter("rising")}
+                className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  topFilter === "rising"
+                    ? "bg-red-500 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+              >
+                상승률
+              </button>
+              <button
+                onClick={() => setTopFilter("falling")}
+                className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  topFilter === "falling"
+                    ? "bg-red-500 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+              >
+                하락률
+              </button>
+              <button
+                onClick={() => setTopFilter("volume")}
+                className={`px-2 py-1 rounded-md text-xs font-medium ${
+                  topFilter === "volume"
+                    ? "bg-red-500 text-white"
+                    : "bg-slate-700 text-gray-200"
+                }`}
+              >
+                거래량
+              </button>
             </div>
           </div>
 
@@ -682,6 +752,7 @@ const HomePage = () => {
             </div>
           ) : (
             <div className="space-y-2">
+
               {(isHistorical ? histTop : selectedRtList).map((stock, index) => (
                 <div
                   key={`trending-${stock.symbol}-${index}`}
