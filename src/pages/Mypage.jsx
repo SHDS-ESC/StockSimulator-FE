@@ -7,6 +7,7 @@ import useDateStore from "@/store/useDateStore";
 import useChartStore from "@/store/useChartStore";
 import { Badge } from "@/components/ui/badge";
 import axiosInstance from "@/util/axiosInstance";
+import { format } from "date-fns";
 
 const MyPage = () => {
   const navigate = useNavigate();
@@ -152,6 +153,7 @@ const MyPage = () => {
           {
             userProfileId: profileId,
             processDate: targetDate,
+            prevProcessDate: targetDate
           }
         );
 
