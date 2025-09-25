@@ -1,28 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import axiosInstance from "../util/axiosInstance";
+import { loadLW } from "@/lib/lightweight";
 
-// -------- Lightweight Charts Loader --------
-function loadLightweightCharts() {
-  return new Promise((resolve) => {
-    if (window.LightweightCharts) return resolve(window.LightweightCharts);
-    const existing = document.getElementById("lightweight-charts-umd");
-    if (!existing) {
-      const script = document.createElement("script");
-      script.id = "lightweight-charts-umd";
-      script.src = "https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js";
-      script.async = true;
-      script.onload = () => resolve(window.LightweightCharts);
-      document.body.appendChild(script);
-    } else {
-      const timer = setInterval(() => {
-        if (window.LightweightCharts) {
-          clearInterval(timer);
-          resolve(window.LightweightCharts);
-        }
-      }, 50);
-    }
-  });
-}
+// 공용 로더(loadLW) 사용
 
 // -------- Historical Chart --------
 function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, initialDay, autoLoad = false, theme = 'light' }) {
@@ -235,7 +215,7 @@ function HistoricalChart({ symbol, onCandlesLoaded, initialYear, initialMonth, i
     if (!containerRef.current) return () => {};
     let localChart = null;
     const init = async () => {
-      const LW = await loadLightweightCharts();
+      const LW = await loadLW();
       if (!isActive || !containerRef.current || !LW) return;
       const kstTimeFormatter = (t) => {
         if (typeof t === 'object' && t) {

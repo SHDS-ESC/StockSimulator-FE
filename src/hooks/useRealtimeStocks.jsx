@@ -5,8 +5,8 @@ import axiosInstance from '../util/axiosInstance';
 let cachedStocks = null;
 let cachedAtMs = 0;
 let inFlightPromise = null;
-// Redis는 백그라운드 스케줄러가 20분마다 갱신됨. 약간 여유를 두고 19분 동안 캐시 사용
-const STALE_MS = 19 * 60 * 1000;
+// 캐시 신선도: 과도한 시간 차이로 상세와 불일치 방지 (1분)
+const STALE_MS = 60 * 1000;
 
 const useRealtimeStocks = (options = {}) => {
   const { enabled = true } = options;
