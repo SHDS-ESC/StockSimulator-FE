@@ -263,6 +263,10 @@ const HomePage = () => {
       );
       return Number.isFinite(n) ? n : -Infinity;
     };
+    const toPrice = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
     return stocks
       .map((s) => ({
         ...s,
@@ -270,6 +274,7 @@ const HomePage = () => {
         change: String(s?.change ?? ""),
         changePercent: String(s?.changePercent ?? ""),
       }))
+      .filter((s) => toPrice(s.price) >= 1)
       .filter((s) => s.changePercent && toPct(s.changePercent) !== -Infinity)
       .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
       .slice(0, 3);
@@ -286,6 +291,10 @@ const HomePage = () => {
       );
       return Number.isFinite(n) ? n : Infinity;
     };
+    const toPrice = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
     return stocks
       .map((s) => ({
         ...s,
@@ -293,6 +302,7 @@ const HomePage = () => {
         change: String(s?.change ?? ""),
         changePercent: String(s?.changePercent ?? ""),
       }))
+      .filter((s) => toPrice(s.price) >= 1)
       .filter((s) => s.changePercent && toPct(s.changePercent) !== Infinity)
       .sort((a, b) => toPct(a.changePercent) - toPct(b.changePercent))
       .slice(0, 3);

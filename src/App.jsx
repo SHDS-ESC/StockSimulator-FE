@@ -10,7 +10,6 @@ import OrderHistory from "./pages/OrderHistory";
 import { Header, Footer } from "./components/layout/Layout";
 import AnimatedBackground from "./components/AnimatedBackground";
 import "./index.css";
-import TradePage from "./pages/trade/TradePage";
 import StockLive from "./pages/trade/StockLive";
 import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
@@ -229,7 +228,6 @@ function App() {
         <div className="overflow-y-auto hide-scrollbar flex-1 pt-10 mb-10 relative pt-16 pb-20">
           <Routes>
             <Route path="/" element={<Login />} />
-            <Route path="/trade" element={<TradePage />} />
             <Route path="/stocks/:symbol" element={<StockLive />} />
             <Route path="/stocks/live/:symbol" element={<StockLive />} />
             <Route path="/home" element={<HomePage />} />
