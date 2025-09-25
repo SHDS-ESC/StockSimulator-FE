@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import LightChart from "@/components/LightChart";
 import {
   TrendingUp,
   TrendingDown,
@@ -23,10 +24,12 @@ const Tooltip = ({ children, content }) => {
 
   const handleMouseEnter = (event) => {
     setShowTooltip(true);
+    const target = event.currentTarget;
     
     // 화면 위치에 따라 툴팁 위치 결정
     setTimeout(() => {
-      const rect = event.currentTarget.getBoundingClientRect();
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
       const windowWidth = window.innerWidth;
       const tooltipWidth = 256; // w-64 = 16rem = 256px
       const padding = 16; // 여백
@@ -87,7 +90,7 @@ const Tooltip = ({ children, content }) => {
       {showTooltip && (
         <div 
           ref={tooltipRef}
-          className="absolute bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-50 w-64 text-center"
+          className="absolute bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-[100] w-64 text-center"
           style={tooltipStyle}
         >
           <div className="whitespace-pre-line">{content}</div>
@@ -97,6 +100,162 @@ const Tooltip = ({ children, content }) => {
           ></div>
         </div>
       )}
+    </div>
+  );
+};
+
+
+// 예측 라인 차트 컴포넌트 (서버 정규화 시계열 사용)
+const PredictionChart = ({ historical = [], predictions = [] }) => {
+  const containerRef = useRef(null);
+  const chartRef = useRef(null);
+  const lastSizeRef = useRef({ width: 0, height: 0 });
+  const historicalSeriesRef = useRef(null);
+  const predictionSeriesRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const init = async () => {
+      const { loadLW } = await import('@/lib/lightweight');
+      const LW = await loadLW();
+      if (!active || !LW || !containerRef.current) return;
+
+      // 차트 생성
+      const hostEl = containerRef.current;
+      // 컨테이너가 가시화되고 폭이 0보다 클 때까지 대기
+      const waitVisible = async () => {
+        let tries = 0;
+        while (tries < 30) {
+          if (hostEl && document.body.contains(hostEl) && Number(hostEl.clientWidth) > 0) break;
+          await new Promise((r) => requestAnimationFrame(r));
+          tries += 1;
+        }
+      };
+      await waitVisible();
+      const chartWidth = Math.max(1, Number(hostEl?.clientWidth) || 0);
+      const chart = LW.createChart(hostEl, {
+        width: chartWidth,
+        height: 260,
+        layout: { background: { color: '#0f172a' }, textColor: '#cbd5e1' },
+        crosshair: { mode: LW.CrosshairMode.Normal },
+        timeScale: { timeVisible: true, secondsVisible: false },
+        rightPriceScale: { borderVisible: false },
+        leftPriceScale: { visible: false },
+        grid: { 
+          vertLines: { color: '#233046' }, 
+          horzLines: { color: '#1e293b' } 
+        },
+      });
+
+      // 시리즈
+      const historicalSeries = chart.addLineSeries({
+        color: '#3b82f6', lineWidth: 2,
+        lastValueVisible: false, priceLineVisible: false,
+        crosshairMarkerVisible: false, lastPriceAnimation: 0,
+      });
+      const predictionSeries = chart.addLineSeries({
+        color: '#22c55e', lineWidth: 2, lineStyle: LW.LineStyle.Dashed,
+        lastValueVisible: false, priceLineVisible: false,
+        crosshairMarkerVisible: false, lastPriceAnimation: 0,
+      });
+
+      chartRef.current = chart;
+      lastSizeRef.current = { width: chartWidth, height: 260 };
+      historicalSeriesRef.current = historicalSeries;
+      predictionSeriesRef.current = predictionSeries;
+
+      // 차트에 데이터 설정 (서버 정규화 시계열 사용)
+      try {
+        const isValidPoint = (p) => p && Number.isFinite(Number(p.time)) && Number.isFinite(Number(p.value));
+        const sortByTime = (a,b) => Number(a.time) - Number(b.time);
+        const dedup = (arr) => {
+          const seen = new Set();
+          const out = [];
+          for (const p of arr) { const t = Number(p.time); if (!seen.has(t)) { seen.add(t); out.push({ time: t, value: Number(p.value) }); } }
+          return out;
+        };
+        const hist = dedup((historical || []).filter(isValidPoint).sort(sortByTime));
+        const pred = dedup((predictions || []).filter(isValidPoint).sort(sortByTime));
+        if (hist.length > 0) { historicalSeries.setData(hist); }
+        if (pred.length > 0) { predictionSeries.setData(pred); }
+        try { chart.timeScale().fitContent(); } catch (_) {}
+      } catch (e) { console.warn('Chart data error:', e); }
+
+      // 리사이즈 핸들러
+      let rafId = null; let ro = null;
+      const onResize = () => {
+        if (!containerRef.current || !chartRef.current) return;
+        if (!containerRef.current.isConnected || !document.body.contains(containerRef.current)) return;
+        const w = Number(containerRef.current.clientWidth);
+        if (!Number.isFinite(w) || w <= 0) return;
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          if (!containerRef.current || !chartRef.current) return;
+          if (!containerRef.current.isConnected) return;
+          const nextW = Math.max(1, Math.floor(w));
+          const nextH = 260;
+          if (lastSizeRef.current.width === nextW && lastSizeRef.current.height === nextH) return;
+          try { chartRef.current.resize(nextW, nextH); lastSizeRef.current = { width: nextW, height: nextH }; } catch (_) {}
+        });
+      };
+      try {
+        if ('ResizeObserver' in window && hostEl) {
+          ro = new ResizeObserver((entries) => {
+            const entry = entries && entries[0];
+            const target = entry && entry.target ? entry.target : hostEl;
+            if (!target || !(target instanceof Element)) return;
+            if (!document.body.contains(target)) return;
+            const cr = entry && (entry.contentRect || {});
+            const w = Number(cr.width || (target).clientWidth);
+            if (!Number.isFinite(w) || w <= 0) return;
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+              if (!chartRef.current) return;
+              const nextW = Math.max(1, Math.floor(w));
+              const nextH = 260;
+              if (lastSizeRef.current.width === nextW && lastSizeRef.current.height === nextH) return;
+              try { chartRef.current.resize(nextW, nextH); lastSizeRef.current = { width: nextW, height: nextH }; } catch (_) {}
+            });
+          });
+          ro.observe(hostEl);
+        } else { window.addEventListener('resize', onResize); }
+      } catch (_) { window.addEventListener('resize', onResize); }
+
+      return () => {
+        try { ro && ro.disconnect && ro.disconnect(); } catch (_) {}
+        window.removeEventListener('resize', onResize);
+        try { if (rafId) cancelAnimationFrame(rafId); } catch (_) {}
+        try { chartRef.current && chartRef.current.remove(); } catch (e) {}
+        chartRef.current = null;
+      };
+    };
+
+    init();
+
+    return () => {
+      active = false;
+      try { chartRef.current && chartRef.current.remove(); } catch (e) {}
+      chartRef.current = null;
+      historicalSeriesRef.current = null;
+      predictionSeriesRef.current = null;
+    };
+  }, [historical, predictions]);
+
+  return (
+    <div className="space-y-2">
+      {/* 범례 */}
+      <div className="flex justify-center space-x-4 text-xs">
+        <div className="flex items-center space-x-1">
+          <div className="w-3 h-0.5 bg-blue-500"></div>
+          <span className="text-gray-400">실제 데이터</span>
+        </div>
+        <div className="flex items-center space-x-1">
+          <div className="w-3 h-0.5 bg-green-500 border-dashed border-t border-green-500"></div>
+          <span className="text-gray-400">AI 예측</span>
+        </div>
+      </div>
+      <div ref={containerRef} style={{ width: '100%', height: 260 }} />
     </div>
   );
 };
@@ -116,37 +275,43 @@ const Chat = () => {
   // 시뮬레이션 상태 관리
   const [simulation, setSimulation] = useState({
     ticker: "AAPL",
-    today: formatDateKey(currentDate || new Date()),
+    baseDate: formatDateKey(currentDate || new Date()),
     trainDays: 110,
-    predictSteps: 3,
+    predictSteps: 10, // 3일 -> 10일로 늘려서 더 많은 데이터 포인트 받기
     loading: false,
     result: null,
     error: null
   });
 
-  // 프로필 진행 날짜 변경 시 기준 날짜 동기화
-  useEffect(() => {
-    setSimulation((prev) => ({ ...prev, today: formatDateKey(currentDate || new Date()) }));
-  }, [currentDate]);
+  // 기준 날짜는 사용자 입력으로 관리 (타임라인 자동 동기화 제거)
 
   // 모달 상태 관리
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
 
   // API 호출 함수
   const handleSimulationSubmit = async () => {
-    // 기준 날짜를 현재 프로필의 진행 날짜로 설정
-    const todayStr = formatDateKey(currentDate || new Date());
-    setSimulation(prev => ({ ...prev, today: todayStr, loading: true, error: null }));
+    // 기준 날짜는 사용자 입력(simulation.baseDate)을 사용
+    const baseDateStr = formatDateKey(simulation.baseDate || new Date());
+    const safeTrain = Number.isFinite(Number(simulation.trainDays)) ? Number(simulation.trainDays) : 110;
+    const safeSteps = Number.isFinite(Number(simulation.predictSteps)) ? Number(simulation.predictSteps) : 10;
+    setSimulation(prev => ({ ...prev, baseDate: baseDateStr, loading: true, error: null }));
     
     try {
-      const response = await axiosInstance.post('http://localhost:8090/dev/agent/predict-sample', {
+      const response = await axiosInstance.post('http://localhost:8090/dev/agent/predict', {
         ticker: simulation.ticker,
-        today: todayStr,
-        train_days: simulation.trainDays,
-        predict_steps: simulation.predictSteps
+        today: baseDateStr, // API는 today 파라미터를 기대하므로 baseDate를 매핑
+        train_days: safeTrain,
+        predict_steps: safeSteps
       });
       
-      console.log('API 응답 데이터:', response.data);
+      
+      // 예측 데이터 분석
+      // 필요 시 디버그: 예측 변화율 계산 로직 보존 (로그 제거)
+      // if (response.data?.price_predictions && response.data.price_predictions.length > 1) {
+      //   const prices = response.data.price_predictions;
+      //   const changes = prices.slice(1).map((price, i) => ((price - prices[i]) / prices[i] * 100).toFixed(2));
+      // }
+      
       setSimulation(prev => ({
         ...prev, 
         loading: false, 
@@ -297,19 +462,48 @@ const Chat = () => {
                       🤖 AI 예측
                     </h3>
                   </div>
-                  <div className="text-center mb-3">
-                    <div className="text-xl font-bold text-purple-400">
-                      +6.8% ~ +9.2%
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      다음 달 예상 수익률
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-300 space-y-1">
-                    <div>• 기술주 섹터 강세 지속 전망</div>
-                    <div>• NVDA 실적 발표 임박 (호재 예상)</div>
-                    <div>• 시장 변동성 증가 예상</div>
-                  </div>
+                  {simulation.result?.investment_analysis ? (
+                    <>
+                      <div className="text-center mb-3">
+                        <div className="text-xl font-bold text-purple-400">
+                          {simulation.result.investment_analysis.metrics?.expected_total_return 
+                            ? `${simulation.result.investment_analysis.metrics.expected_total_return >= 0 ? '+' : ''}${simulation.result.investment_analysis.metrics.expected_total_return.toFixed(1)}%`
+                            : '+6.8% ~ +9.2%'
+                          }
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          예상 총 수익률
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-300 space-y-1">
+                        {simulation.result.investment_analysis.signals?.map((signal, index) => (
+                          <div key={index}>• {signal}</div>
+                        )) || (
+                          <>
+                            <div>• 기술주 섹터 강세 지속 전망</div>
+                            <div>• NVDA 실적 발표 임박 (호재 예상)</div>
+                            <div>• 시장 변동성 증가 예상</div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-center mb-3">
+                        <div className="text-xl font-bold text-purple-400">
+                          +6.8% ~ +9.2%
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          다음 달 예상 수익률
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-300 space-y-1">
+                        <div>• 기술주 섹터 강세 지속 전망</div>
+                        <div>• NVDA 실적 발표 임박 (호재 예상)</div>
+                        <div>• 시장 변동성 증가 예상</div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -433,16 +627,16 @@ const Chat = () => {
                       />
                     </div>
                     
-                    {/* 기준 날짜 */}
+                    {/* baseDate (사용자 선택 가능) */}
                     <div>
-                      <label className="block text-xs text-gray-300 mb-1">기준 날짜</label>
+                      <label className="block text-xs text-gray-300 mb-1">baseDate</label>
                       <input
                         type="date"
-                        value={simulation.today}
-                        disabled
-                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white opacity-70 cursor-not-allowed"
+                        value={simulation.baseDate}
+                        onChange={(e) => handleSimulationChange('baseDate', e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
                       />
-                      <p className="text-[10px] text-gray-400 mt-1">AI 예측 실행 시 오늘 날짜로 자동 설정됩니다.</p>
+                      <p className="text-[10px] text-gray-400 mt-1">AI 기준 날짜(baseDate)를 직접 선택하세요.</p>
                     </div>
                     
                     {/* 학습 기간과 예측 일수 */}
@@ -452,7 +646,13 @@ const Chat = () => {
                         <input
                           type="number"
                           value={simulation.trainDays}
-                          onChange={(e) => handleSimulationChange('trainDays', parseInt(e.target.value))}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === '') return handleSimulationChange('trainDays', '');
+                            const n = parseInt(v, 10);
+                            if (Number.isNaN(n)) return; 
+                            handleSimulationChange('trainDays', n);
+                          }}
                           min="30"
                           max="365"
                           className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
@@ -463,7 +663,13 @@ const Chat = () => {
                         <input
                           type="number"
                           value={simulation.predictSteps}
-                          onChange={(e) => handleSimulationChange('predictSteps', parseInt(e.target.value))}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === '') return handleSimulationChange('predictSteps', '');
+                            const n = parseInt(v, 10);
+                            if (Number.isNaN(n)) return; 
+                            handleSimulationChange('predictSteps', n);
+                          }}
                           min="1"
                           max="30"
                           className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white"
@@ -570,22 +776,55 @@ const Chat = () => {
             💡 AI 투자 인사이트
           </h3>
           <div className="space-y-3">
-            <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
-              <h4 className="font-medium text-purple-300 mb-1 text-sm">
-                이번 주 추천
-              </h4>
-              <p className="text-xs text-purple-200">
-                기술주 비중 조정, 헬스케어 분산투자 고려
-              </p>
-            </div>
-            <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
-              <h4 className="font-medium text-green-300 mb-1 text-sm">
-                성과 분석
-              </h4>
-              <p className="text-xs text-green-200">
-                최근 30일 단타 성과 우수, 현재 전략 유지 권장
-              </p>
-            </div>
+            {simulation.result?.investment_analysis ? (
+              <>
+                <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
+                  <h4 className="font-medium text-purple-300 mb-1 text-sm">
+                    {simulation.result.investment_analysis.recommendation || '투자 추천'}
+                  </h4>
+                  <p className="text-xs text-purple-200">
+                    {simulation.result.investment_analysis.action || '기술주 비중 조정, 헬스케어 분산투자 고려'}
+                  </p>
+                  {simulation.result.investment_analysis.confidence && (
+                    <p className="text-xs text-purple-300 mt-1">
+                      신뢰도: {simulation.result.investment_analysis.confidence}
+                    </p>
+                  )}
+                </div>
+                <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
+                  <h4 className="font-medium text-green-300 mb-1 text-sm">
+                    성과 분석
+                  </h4>
+                  <p className="text-xs text-green-200">
+                    최근 30일 단타 성과 우수, 현재 전략 유지 권장
+                  </p>
+                  {simulation.result.investment_analysis.score && (
+                    <p className="text-xs text-green-300 mt-1">
+                      AI 점수: {simulation.result.investment_analysis.score}/{simulation.result.investment_analysis.max_score || 100}
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
+                  <h4 className="font-medium text-purple-300 mb-1 text-sm">
+                    이번 주 추천
+                  </h4>
+                  <p className="text-xs text-purple-200">
+                    기술주 비중 조정, 헬스케어 분산투자 고려
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
+                  <h4 className="font-medium text-green-300 mb-1 text-sm">
+                    성과 분석
+                  </h4>
+                  <p className="text-xs text-green-200">
+                    최근 30일 단타 성과 우수, 현재 전략 유지 권장
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -600,7 +839,7 @@ const Chat = () => {
           />
 
           {/* 모달 컨텐츠 */}
-          <div className="relative bg-slate-800 rounded-2xl shadow-2xl w-[90vw] max-w-md mx-4 max-h-[85vh] overflow-y-auto">
+          <div className="relative bg-slate-800 rounded-2xl shadow-2xl w-[90vw] max-w-md mx-4 max-h-[85vh] overflow-visible">
             {/* 헤더 */}
             <div className="sticky top-0 bg-slate-800 border-b border-slate-700 px-6 py-4 rounded-t-2xl">
               <div className="flex items-center justify-between">
@@ -623,7 +862,7 @@ const Chat = () => {
             </div>
 
             {/* 컨텐츠 */}
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 max-h-[calc(85vh-120px)] overflow-y-auto">
               {/* 기본 정보 */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-700 rounded-lg p-3">
@@ -721,7 +960,7 @@ const Chat = () => {
                       </span>
                     </Tooltip>
                     <span className="text-gray-400">
-                      점수: {simulation.result.investment_analysis.score}/{simulation.result.investment_analysis.maxScore}
+                      점수: {simulation.result.investment_analysis.score}/{simulation.result.investment_analysis.max_score}
                     </span>
                   </div>
                 </div>
@@ -737,7 +976,7 @@ const Chat = () => {
                         <div className="text-gray-400 border-b border-dotted border-gray-500">현재가격</div>
                       </Tooltip>
                       <div className="text-white font-medium">
-                        ${(simulation.result.investment_analysis.metrics?.currentPrice || simulation.result.last_price)?.toFixed(2) || 'N/A'}
+                        ${(simulation.result.investment_analysis.metrics?.current_price || simulation.result.last_price)?.toFixed(2) || 'N/A'}
                       </div>
                     </div>
                     <div>
@@ -745,7 +984,7 @@ const Chat = () => {
                         <div className="text-gray-400 border-b border-dotted border-gray-500">예상평균가격</div>
                       </Tooltip>
                       <div className="text-white font-medium">
-                        ${simulation.result.investment_analysis.metrics?.predictedAvgPrice?.toFixed(2) || 'N/A'}
+                        ${simulation.result.investment_analysis.metrics?.predicted_avg_price?.toFixed(2) || 'N/A'}
                       </div>
                     </div>
                     <div>
@@ -753,20 +992,12 @@ const Chat = () => {
                         <div className="text-gray-400 border-b border-dotted border-gray-500">기대수익률</div>
                       </Tooltip>
                       <div className={`font-medium ${
-                        (simulation.result.investment_analysis.metrics?.expectedTotalReturn || 0) >= 0 
+                        (simulation.result.investment_analysis.metrics?.expected_total_return || 0) >= 0 
                           ? 'text-green-400' 
                           : 'text-red-400'
                       }`}>
-                        {(simulation.result.investment_analysis.metrics?.expectedTotalReturn || 0) >= 0 ? '+' : ''}
-                        {simulation.result.investment_analysis.metrics?.expectedTotalReturn?.toFixed(1) || 'N/A'}%
-                      </div>
-                    </div>
-                    <div>
-                      <Tooltip content="주가가 현재가보다 상승할 확률입니다. 70% 이상이면 상승 가능성이 높다고 판단할 수 있습니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">상승확률</div>
-                      </Tooltip>
-                      <div className="text-white font-medium">
-                        {simulation.result.investment_analysis.metrics?.upsideProbability?.toFixed(1) || '0.0'}%
+                        {(simulation.result.investment_analysis.metrics?.expected_total_return || 0) >= 0 ? '+' : ''}
+                        {simulation.result.investment_analysis.metrics?.expected_total_return?.toFixed(1) || 'N/A'}%
                       </div>
                     </div>
                   </div>
@@ -774,7 +1005,7 @@ const Chat = () => {
               )}
 
               {/* 리스크 지표 - 툴팁 포함 */}
-              {simulation.result?.investment_analysis?.riskMetrics && (
+              {simulation.result?.investment_analysis?.risk_metrics && (
                 <div className="bg-slate-700 rounded-lg p-4">
                   <div className="text-sm font-medium text-white mb-3">리스크 지표</div>
                   <div className="grid grid-cols-3 gap-2 text-xs">
@@ -783,7 +1014,7 @@ const Chat = () => {
                         <div className="text-gray-400 border-b border-dotted border-gray-500">VaR (95%)</div>
                       </Tooltip>
                       <div className="text-red-400 font-medium">
-                        {(simulation.result.investment_analysis.riskMetrics.var95 * 100)?.toFixed(1)}%
+                        {(simulation.result.investment_analysis.risk_metrics.var_95 * 100)?.toFixed(1)}%
                       </div>
                     </div>
                     <div>
@@ -791,7 +1022,7 @@ const Chat = () => {
                         <div className="text-gray-400 border-b border-dotted border-gray-500">최대손실</div>
                       </Tooltip>
                       <div className="text-red-400 font-medium">
-                        {simulation.result.investment_analysis.riskMetrics.maxExpectedLoss?.toFixed(1)}%
+                        {simulation.result.investment_analysis.risk_metrics.max_expected_loss?.toFixed(1)}%
                       </div>
                     </div>
                     <div>
@@ -799,7 +1030,7 @@ const Chat = () => {
                         <div className="text-gray-400 border-b border-dotted border-gray-500">샤프비율</div>
                       </Tooltip>
                       <div className="text-white font-medium">
-                        {simulation.result.investment_analysis.riskMetrics.estimatedSharpeRatio?.toFixed(2)}
+                        {simulation.result.investment_analysis.risk_metrics.estimated_sharpe_ratio?.toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -827,42 +1058,16 @@ const Chat = () => {
                 </div>
               )}
 
-              {/* 일별 예측 데이터 */}
-              {simulation.result?.prediction_dates && simulation.result.prediction_dates.length > 0 && (
-                <details className="bg-slate-700 rounded-lg">
-                  <summary className="p-4 cursor-pointer text-sm font-medium text-white hover:bg-slate-600 rounded-lg">
-                    일별 예측 상세 보기 ({simulation.result.prediction_dates.length}일)
-                  </summary>
-                  <div className="p-4 pt-0 space-y-2 max-h-40 overflow-y-auto">
-                    {simulation.result.prediction_dates.map((date, index) => {
-                      const price = simulation.result.price_predictions?.[index];
-                      const returnRate = simulation.result.return_predictions?.[index];
-                      const isPositive = returnRate >= 0;
-                      return (
-                        <div key={index} className="flex justify-between items-center text-xs">
-                          <span className="text-gray-300">
-                            {date} (D+{index + 1})
-                          </span>
-                          <div className="flex items-center space-x-3">
-                            <span className="text-white font-medium">
-                              ${price?.toFixed(2)}
-                            </span>
-                            <span className={`font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                              {isPositive ? '+' : ''}{returnRate?.toFixed(2)}%
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
-              )}
 
               {/* 예측 요약 카드 */}
-              {simulation.result?.prediction_dates && simulation.result.prediction_dates.length > 0 && (
+                  {simulation.result?.predictions && simulation.result.predictions.length > 0 && (
                 <div className="bg-slate-700 rounded-lg p-4">
                   <div className="text-sm font-medium text-white mb-3">예측 요약</div>
-                  <div className="grid grid-cols-3 gap-3 text-xs">
+                  {/* 예측 라인 차트 */}
+                  <div className="mb-4 bg-slate-800 rounded-md p-2">
+                    <PredictionChart historical={simulation.result?.historical} predictions={simulation.result?.predictions} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                     <div className="bg-slate-600 rounded p-3 text-center">
                       <div className="text-gray-400 mb-1">시작가</div>
                       <div className="text-white font-medium">
@@ -875,8 +1080,29 @@ const Chat = () => {
                         ${simulation.result.price_predictions[simulation.result.price_predictions.length - 1]?.toFixed(2)}
                       </div>
                     </div>
+                  </div>
+                  
+                  {/* 예측 가격 범위 */}
+                  {simulation.result.investment_analysis?.metrics && (
+                    <div className="grid grid-cols-2 gap-3 text-xs mb-3">
+                      <div className="bg-green-900/30 border border-green-700 rounded p-3 text-center">
+                        <div className="text-green-400 mb-1">예측 최고가</div>
+                        <div className="text-white font-medium">
+                          ${simulation.result.investment_analysis.metrics.predicted_max_price?.toFixed(2) || 'N/A'}
+                        </div>
+                      </div>
+                      <div className="bg-red-900/30 border border-red-700 rounded p-3 text-center">
+                        <div className="text-red-400 mb-1">예측 최저가</div>
+                        <div className="text-white font-medium">
+                          ${simulation.result.investment_analysis.metrics.predicted_min_price?.toFixed(2) || 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-3 text-xs">
                     <div className="bg-slate-600 rounded p-3 text-center">
-                      <div className="text-gray-400 mb-1">예상수익률</div>
+                      <div className="text-gray-400 mb-1">총 수익률</div>
                       <div className={`font-medium ${
                         simulation.result.return_predictions[simulation.result.return_predictions.length - 1] >= 0 
                           ? 'text-emerald-400' 
@@ -886,10 +1112,53 @@ const Chat = () => {
                         {simulation.result.return_predictions[simulation.result.return_predictions.length - 1]?.toFixed(2)}%
                       </div>
                     </div>
+                    <div className="bg-slate-600 rounded p-3 text-center">
+                      <div className="text-gray-400 mb-1">일평균 수익률</div>
+                      <div className={`font-medium ${
+                        (simulation.result.investment_analysis?.metrics?.expected_avg_daily_return || 0) >= 0 
+                          ? 'text-emerald-400' 
+                          : 'text-red-400'
+                      }`}>
+                        {(simulation.result.investment_analysis?.metrics?.expected_avg_daily_return || 0) >= 0 ? '+' : ''}
+                        {simulation.result.investment_analysis?.metrics?.expected_avg_daily_return?.toFixed(3) || 'N/A'}%
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
+
+              {/* AI 모델 정보 */}
+              {(simulation.result?.train_data_count || simulation.result?.feature_count) && (
+                <div className="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border border-indigo-700/30 rounded-lg p-4">
+                  <div className="text-sm font-medium text-white mb-3 flex items-center">
+                    <span className="mr-2">🤖</span>
+                    AI 모델 정보
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div className="bg-slate-800/50 rounded p-3 text-center">
+                      <div className="text-gray-400 mb-1">학습 데이터</div>
+                      <div className="text-white font-medium">
+                        {simulation.result.train_data_count?.toLocaleString() || 'N/A'}개
+                      </div>
+                    </div>
+                    <div className="bg-slate-800/50 rounded p-3 text-center">
+                      <div className="text-gray-400 mb-1">분석 특성</div>
+                      <div className="text-white font-medium">
+                        {simulation.result.feature_count || 'N/A'}개
+                      </div>
+                    </div>
+                  </div>
+                  {simulation.result.investment_analysis?.metrics?.predicted_volatility && (
+                    <div className="mt-3 text-center">
+                      <div className="text-gray-400 text-xs mb-1">예측 변동성</div>
+                      <div className="text-yellow-400 font-medium">
+                        {simulation.result.investment_analysis.metrics.predicted_volatility.toFixed(2)}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Base64 차트 이미지 (백업용) */}
               {simulation.result?.chartFull && simulation.result.chartFull !== "sample_chart_full_base64_data" && (
