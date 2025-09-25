@@ -19,10 +19,10 @@ import { Button } from "../ui/button";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useChartStore from "@/store/useChartStore";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 // Header 컴포넌트
-export const Header = ({ onClick }) => {
-  const { setPortfolioList } = useChartStore();
+export const Header = ({ onClick, onTurnOverData,toggleCalendar  }) => {
+  const { setPortfolioList, initChart } = useChartStore();
   const {
     currentDate,
     goNextTurn,
@@ -30,12 +30,13 @@ export const Header = ({ onClick }) => {
     showSkipNotice,
     clearSkipNotice,
   } = useDateStore();
+
   const { lastProfileId } = useLoginStore();
   console.log("현재 날짜" + currentDate);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-
+  const [list, setList] = useState();
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
@@ -52,60 +53,73 @@ export const Header = ({ onClick }) => {
   };
 
   const handleNextButtonClick = async () => {
-    const currentDateObj = new Date(currentDate);
-    currentDateObj.setDate(currentDateObj.getDate() + 1);
-    const nextKey = currentDateObj.toISOString().split("T")[0];
-    let effectiveKey = nextKey;
-
-    try {
-      // 백엔드에서 다음 유효 거래일 메타 제공: /api/db/next-trading-day
-      const r = await axiosInstance.get(`/db/next-trading-day`, {
-        params: { date: nextKey, max: 30 },
-      });
-      const eff = String(r?.data?.effectiveDate || "") || null;
-      const result = eff
-        ? {
-            effectiveDate: eff,
-            skipped: Number(r?.data?.skippedDays || 0),
-            reachedLimit: false,
-          }
-        : { effectiveDate: nextKey, skipped: 0, reachedLimit: false };
-      if (!result.reachedLimit && result.effectiveDate) {
-        effectiveKey = result.effectiveDate;
-        if (effectiveKey !== nextKey) {
-          showSkipNotice({
-            from: nextKey,
-            to: effectiveKey,
-            skipped: result.skipped,
-          });
-          setTimeout(() => clearSkipNotice(), 2500);
+  const currentDateObj = new Date(currentDate);
+  currentDateObj.setDate(currentDateObj.getDate() + 1);
+  const nextKey = currentDateObj.toISOString().split("T")[0];
+  let effectiveKey = nextKey;
+  try {
+    // 백엔드에서 다음 유효 거래일 메타 제공: /api/db/next-trading-day
+    const r = await axiosInstance.get(`/db/next-trading-day`, {
+      params: { date: nextKey, max: 30 },
+    });
+    const eff = String(r?.data?.effectiveDate || "") || null;
+    const result = eff
+      ? {
+          effectiveDate: eff,
+          skipped: Number(r?.data?.skippedDays || 0),
+          reachedLimit: false,
         }
+      : { effectiveDate: nextKey, skipped: 0, reachedLimit: false };
+    if (!result.reachedLimit && result.effectiveDate) {
+      effectiveKey = result.effectiveDate;
+      if (effectiveKey !== nextKey) {
+        showSkipNotice({
+          from: nextKey,
+          to: effectiveKey,
+          skipped: result.skipped,
+        });
+        setTimeout(() => clearSkipNotice(), 2500);
       }
-    } catch (_) {
-      // ignore, fall back to nextKey
+    }
+  } catch (_) {
+    // ignore, fall back to nextKey
+  }
+
+    
+  // 서버에 유효 거래일로 업데이트
+  const effectiveDateObj = new Date(effectiveKey);
+  const response = await axiosInstance.post(
+    "/userprofile/update/process-date",
+    {
+      userProfileId: lastProfileId,
+      prevProcessDate: format(subDays(effectiveDateObj, 1), "yyyy-MM-dd"),
+      processDate: format(effectiveDateObj, "yyyy-MM-dd"),
+    },
+    { withCredentials: true }
+  );
+
+  console.log('턴 종료 응답:', response.data);
+
+  // changeList 사용 (차트용)
+  const responseData = response.data.changeList.map((holdings) => ({
+    value: holdings.currentPrice, // currentPrice 사용
+    name: holdings.ticker,
+    itemStyle: { color: getRandomColor() },
+  }));
+
+  setList(response.data.changeList)
+ if (onTurnOverData) {
+      onTurnOverData(response.data.changeList);
     }
 
-    // 서버에 유효 거래일로 업데이트
-    const effectiveDateObj = new Date(effectiveKey);
-    const response = await axiosInstance.post(
-      "/userprofile/update/process-date",
-      {
-        userProfileId: lastProfileId,
-        processDate: format(effectiveDateObj, "yyyy-MM-dd"),
-      },
-      { withCredentials: true }
-    );
-
-    const responseData = response.data.holdingsDTOList.map((holdings) => ({
-      value: holdings.price,
-      name: holdings.ticker,
-      itemStyle: { color: getRandomColor() },
-    }));
-
-    setPortfolioList(responseData); // store에 저장
-    // 전역 날짜도 유효 거래일로 진행
+    console.log('차트 데이터:', responseData);
+    setPortfolioList(responseData);
     goNextTurn(effectiveDateObj);
-  };
+
+    setPortfolioList(responseData);
+goNextTurn(effectiveDateObj);
+
+};
 
   function getRandomColor() {
     return (
@@ -167,7 +181,7 @@ export const Header = ({ onClick }) => {
               <Menu className="w-5 h-5 text-white" />
             )}
           </button>
-          
+
           <button
             onClick={onClick}
             className="text-white w-6 h-6 flex flex-col items-center justify-center gap-1 cursor-pointer"

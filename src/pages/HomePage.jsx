@@ -32,7 +32,9 @@ const formatCurrency = (value) => {
     minimumFractionDigits: 0, // 소수점 없애기
   });
 
-  return numValue < 0 ? `- ${formatted.replace("$","$ ")}` : `+${formatted.replace("$","$ ")}`;
+  return numValue < 0
+    ? `- ${formatted.replace("$", "$ ")}`
+    : `+${formatted.replace("$", "$ ")}`;
 };
 
 const formatCurrencyValue = (value) => {
@@ -51,7 +53,7 @@ const formatCurrencyValue = (value) => {
     minimumFractionDigits: 0, // 소수점 없애기
   });
 
-  return formatted.replace("$","$ ");
+  return formatted.replace("$", "$ ");
 };
 
 const formatPercentage = (value) => {
@@ -501,7 +503,7 @@ const HomePage = () => {
               <div>
                 <p className="text-gray-400 text-xs mb-1">투자</p>
                 <p className="text-white text-lg font-semibold">
-                   {formatCurrencyValue(selectedProfile?.totalInvested)}
+                  {formatCurrencyValue(selectedProfile?.totalInvested)}
                 </p>
                 <p
                   className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}
@@ -513,7 +515,7 @@ const HomePage = () => {
               <div>
                 <p className="text-gray-400 text-xs mb-1">현금</p>
                 <p className="text-white text-lg font-semibold">
-                 {formatCurrencyValue(selectedProfile?.cashBalance)}
+                  {formatCurrencyValue(selectedProfile?.cashBalance)}
                 </p>
               </div>
             </div>
@@ -558,43 +560,51 @@ const HomePage = () => {
               {holdingStocks
                 .filter((stock) => stock.quantity && stock.quantity > 0)
                 .map((stock, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between"
+                  <button
+                    className="w-full"
+                    onClick={() => navigate(`/stocks/${stock.ticker}`)}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
-                        <img
-                          src={stock.logo}
-                          alt={stock.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="text-gray-600 font-bold text-xs hidden">
-                          {stock.ticker}
-                        </span>
+                    {" "}
+                    <div
+                      key={index}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
+                          <img
+                            src={stock.logo}
+                            alt={stock.name}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="text-gray-600 font-bold text-xs hidden">
+                            {stock.ticker}
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="text-white font-medium text-sm">
+                            {stock.name}
+                          </h4>
+                          <p className="text-gray-400 text-xs text-start">
+                            {stock.ticker}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-white font-medium text-sm">
-                          {stock.name}
-                        </h4>
-                        <p className="text-gray-400 text-xs">{stock.ticker}</p>
+                      <div className="text-right">
+                        <p className="text-white font-semibold text-[10px] mb-2">
+                          {(stock.quantity || 0).toLocaleString("en-US")}주
+                        </p>
+                        <p className="text-white font-semibold text-sm">
+                          {formatCurrencyValue(stock.price)}
+                        </p>
+                        <p
+                          className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}
+                        >
+                          {formatCurrency(stock.changeAmount)} (
+                          {formatPercentage(stock.change)})
+                        </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-white font-semibold text-[10px] mb-2">
-                        {(stock.quantity || 0).toLocaleString("en-US")}주
-                      </p>
-                      <p className="text-white font-semibold text-sm">
-                        {formatCurrencyValue(stock.price)}
-                      </p>
-                      <p
-                        className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}
-                      >
-                        {formatCurrency(stock.change)} (
-                        {formatPercentage(stock.changeAmount)})
-                      </p>
-                    </div>
-                  </div>
+                  </button>
                 ))}
             </div>
           )}
@@ -707,7 +717,7 @@ const HomePage = () => {
                   <div className="text-right">
                     {/* 1줄: 가격 */}
                     <p className="text-white font-semibold text-sm">
-                       {formatCurrencyValue(stock.price)}
+                      {formatCurrencyValue(stock.price)}
                     </p>
 
                     {/* 2줄: 변동값 + 퍼센트 */}
@@ -811,7 +821,7 @@ const HomePage = () => {
                       <p className="text-white font-semibold text-base">
                         {formatCurrencyValue(profile.cashBalance)}
                       </p>
-                      
+
                       <p className="text-gray-400 text-xs">총자산</p>
                     </div>
                   </div>
