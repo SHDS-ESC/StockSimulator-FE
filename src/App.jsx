@@ -6,6 +6,7 @@ import News from "./pages/News";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyPage from "./pages/Mypage";
+import OrderHistory from "./pages/OrderHistory";
 import { Header, Footer } from "./components/layout/Layout";
 import AnimatedBackground from "./components/AnimatedBackground";
 import "./index.css";
@@ -148,7 +149,8 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, setCurrentDate, skipNotice ,goNextTurn } = useDateStore();
+  const { isTurnOver, currentDate, setCurrentDate, skipNotice, goNextTurn } =
+    useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
@@ -174,7 +176,6 @@ function App() {
       setPortfolioList(responseData); // store에 저장
       goNextTurn(selectedDate);
       setIsCalendarOpen(false);
-
     } catch (error) {
       console.error("날짜 업데이트 실패:", error);
       // 에러 발생 시 사용자에게 알림
@@ -235,6 +236,7 @@ function App() {
             <Route path="/news" element={<News />} />
             <Route path="/register" element={<Register />} />
             <Route path="/mypage" element={<MyPage />} />
+            <Route path="/orderhistory" element={<OrderHistory />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/redis-test" element={<RedisTest />} />
           </Routes>

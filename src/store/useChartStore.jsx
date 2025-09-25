@@ -9,15 +9,24 @@ const useChartStore = create((set, get) => ({
   setPortfolioList: (list) => set({ portfolioList: list }),
 
   initChart: (chartRef) => {
-   if (!chartRef?.current) return;
+    console.log("=== useChartStore initChart 실행 ===");
+    console.log("chartRef:", chartRef);
+    console.log("chartRef.current:", chartRef?.current);
+
+    if (!chartRef?.current) {
+      console.log("차트 컨테이너가 없습니다!");
+      return;
+    }
 
     // 기존 차트 있으면 dispose
     if (get().chartInstance) {
+      console.log("기존 차트 dispose");
       get().chartInstance.dispose();
     }
 
     const myChart = echarts.init(chartRef.current);
     set({ chartInstance: myChart });
+    console.log("차트 인스턴스 생성 완료:", myChart);
 
     const updateChart = () => {
       const data = get().portfolioList;
@@ -49,7 +58,12 @@ const useChartStore = create((set, get) => ({
             avoidLabelOverlap: false,
             label: { show: false },
             emphasis: {
-              label: { show: true, fontSize: 14, fontWeight: "bold", color: "#fff" },
+              label: {
+                show: true,
+                fontSize: 14,
+                fontWeight: "bold",
+                color: "#fff",
+              },
             },
             data: data,
           },
