@@ -272,7 +272,7 @@ export default function StockLive() {
             <strong style={{ whiteSpace: "nowrap" }}>
               {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
             </strong>
-            <span style={{ 
+            <span style={{
               color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350",
               whiteSpace: "nowrap",
               fontSize: "14px"
@@ -283,7 +283,7 @@ export default function StockLive() {
             </span>
             {err && <span className="muted" style={{ fontSize: "12px" }}>{err}</span>}
           </div>
-          
+
           <button
             onClick={() => setShowGuide(true)}
             title="지표 가이드"
@@ -370,7 +370,7 @@ export default function StockLive() {
           <DialogHeader>
             <DialogTitle className="text-white">보조 지표 가이드</DialogTitle>
           </DialogHeader>
-          
+
           {/* 탭 네비게이션 */}
           <div className="flex space-x-1 bg-slate-900 rounded-lg p-1">
             {[
@@ -456,7 +456,7 @@ export default function StockLive() {
             )}
 
           </div>
-          
+
           <DialogFooter>
             <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white" onClick={() => setShowGuide(false)}>닫기</Button>
           </DialogFooter>
