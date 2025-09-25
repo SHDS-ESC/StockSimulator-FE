@@ -21,8 +21,8 @@ import useLoginStore from "@/store/useLoginStore";
 import useChartStore from "@/store/useChartStore";
 import { format, subDays } from "date-fns";
 // Header 컴포넌트
-export const Header = ({ onClick, onTurnOverData,toggleCalendar  }) => {
-  const { setPortfolioList, initChart } = useChartStore();
+export const Header = ({ onClick, onTurnOverData }) => {
+  const { setPortfolioList } = useChartStore();
   const {
     currentDate,
     goNextTurn,
@@ -53,115 +53,113 @@ export const Header = ({ onClick, onTurnOverData,toggleCalendar  }) => {
   };
 
   const handleNextButtonClick = async () => {
-  const currentDateObj = new Date(currentDate);
-  currentDateObj.setDate(currentDateObj.getDate() + 1);
-  const nextKey = currentDateObj.toISOString().split("T")[0];
-  let effectiveKey = nextKey;
-  try {
-    // 백엔드에서 다음 유효 거래일 메타 제공: /api/db/next-trading-day
-    const r = await axiosInstance.get(`/db/next-trading-day`, {
-      params: { date: nextKey, max: 30 },
-    });
-    const eff = String(r?.data?.effectiveDate || "") || null;
-    const result = eff
-      ? {
-          effectiveDate: eff,
-          skipped: Number(r?.data?.skippedDays || 0),
-          reachedLimit: false,
+    const currentDateObj = new Date(currentDate);
+    currentDateObj.setDate(currentDateObj.getDate() + 1);
+    const nextKey = currentDateObj.toISOString().split("T")[0];
+    let effectiveKey = nextKey;
+    try {
+      // 백엔드에서 다음 유효 거래일 메타 제공: /api/db/next-trading-day
+      const r = await axiosInstance.get(`/db/next-trading-day`, {
+        params: { date: nextKey, max: 30 },
+      });
+      const eff = String(r?.data?.effectiveDate || "") || null;
+      const result = eff
+        ? {
+            effectiveDate: eff,
+            skipped: Number(r?.data?.skippedDays || 0),
+            reachedLimit: false,
+          }
+        : { effectiveDate: nextKey, skipped: 0, reachedLimit: false };
+      if (!result.reachedLimit && result.effectiveDate) {
+        effectiveKey = result.effectiveDate;
+        if (effectiveKey !== nextKey) {
+          showSkipNotice({
+            from: nextKey,
+            to: effectiveKey,
+            skipped: result.skipped,
+          });
+          setTimeout(() => clearSkipNotice(), 2500);
         }
-      : { effectiveDate: nextKey, skipped: 0, reachedLimit: false };
-    if (!result.reachedLimit && result.effectiveDate) {
-      effectiveKey = result.effectiveDate;
-      if (effectiveKey !== nextKey) {
-        showSkipNotice({
-          from: nextKey,
-          to: effectiveKey,
-          skipped: result.skipped,
-        });
-        setTimeout(() => clearSkipNotice(), 2500);
       }
+    } catch (_) {
+      // ignore, fall back to nextKey
     }
-  } catch (_) {
-    // ignore, fall back to nextKey
-  }
 
+    // 서버에 유효 거래일로 업데이트
+    const effectiveDateObj = new Date(effectiveKey);
+    const response = await axiosInstance.post(
+      "/userprofile/update/process-date",
+      {
+        userProfileId: lastProfileId,
+        prevProcessDate: format(subDays(effectiveDateObj, 1), "yyyy-MM-dd"),
+        processDate: format(effectiveDateObj, "yyyy-MM-dd"),
+      },
+      { withCredentials: true }
+    );
 
-  // 서버에 유효 거래일로 업데이트
-  const effectiveDateObj = new Date(effectiveKey);
-  const response = await axiosInstance.post(
-    "/userprofile/update/process-date",
-    {
-      userProfileId: lastProfileId,
-      prevProcessDate: format(subDays(effectiveDateObj, 1), "yyyy-MM-dd"),
-      processDate: format(effectiveDateObj, "yyyy-MM-dd"),
-    },
-    { withCredentials: true }
-  );
+    console.log("턴 종료 응답:", response.data);
 
-  console.log('턴 종료 응답:', response.data);
+    // changeList 사용 (차트용)
+    const responseData = response.data.changeList.map((holdings) => ({
+      value: holdings.currentPrice, // currentPrice 사용
+      name: holdings.ticker,
+      itemStyle: { color: getRandomColor() },
+    }));
 
-  // changeList 사용 (차트용)
-  const responseData = response.data.changeList.map((holdings) => ({
-    value: holdings.currentPrice, // currentPrice 사용
-    name: holdings.ticker,
-    itemStyle: { color: getRandomColor() },
-  }));
-
-  setList(response.data.changeList)
- if (onTurnOverData) {
+    setList(response.data.changeList);
+    if (onTurnOverData) {
       onTurnOverData(response.data.changeList);
     }
 
-    console.log('차트 데이터:', responseData);
+    console.log("차트 데이터:", responseData);
     setPortfolioList(responseData);
     goNextTurn(effectiveDateObj);
 
+    function getRandomColor() {
+      return (
+        "#" +
+        Math.floor(Math.random() * 16777215)
+          .toString(16)
+          .padStart(6, "0")
+      );
+    }
 
-  function getRandomColor() {
-    return (
-      "#" +
-      Math.floor(Math.random() * 16777215)
-        .toString(16)
-        .padStart(6, "0")
-    );
-  }
-
-  // 마운트 시 현재 날짜가 휴장일이면 유효 거래일로 스냅
-  useEffect(() => {
-    let active = true;
-    const snap = async () => {
-      if (!lastProfileId) return;
-      try {
-        // 서버 메타 호출만 사용
-        const r = await axiosInstance.get(`/db/next-trading-day`, {
-          params: { date: currentDate, max: 30 },
-        });
-        const eff = String(r?.data?.effectiveDate || "") || null;
-        const result = eff
-          ? {
-              effectiveDate: eff,
-              skipped: Number(r?.data?.skippedDays || 0),
-              reachedLimit: false,
-            }
-          : { effectiveDate: currentDate, skipped: 0, reachedLimit: false };
-        if (!active) return;
-        if (
-          !result.reachedLimit &&
-          result.effectiveDate &&
-          result.effectiveDate !== currentDate
-        ) {
-          setCurrentDate(result.effectiveDate);
+    // 마운트 시 현재 날짜가 휴장일이면 유효 거래일로 스냅
+    useEffect(() => {
+      let active = true;
+      const snap = async () => {
+        if (!lastProfileId) return;
+        try {
+          // 서버 메타 호출만 사용
+          const r = await axiosInstance.get(`/db/next-trading-day`, {
+            params: { date: currentDate, max: 30 },
+          });
+          const eff = String(r?.data?.effectiveDate || "") || null;
+          const result = eff
+            ? {
+                effectiveDate: eff,
+                skipped: Number(r?.data?.skippedDays || 0),
+                reachedLimit: false,
+              }
+            : { effectiveDate: currentDate, skipped: 0, reachedLimit: false };
+          if (!active) return;
+          if (
+            !result.reachedLimit &&
+            result.effectiveDate &&
+            result.effectiveDate !== currentDate
+          ) {
+            setCurrentDate(result.effectiveDate);
+          }
+        } catch (_) {
+          // ignore
         }
-      } catch (_) {
-        // ignore
-      }
-    };
-    snap();
-    return () => {
-      active = false;
-    };
-  }, [lastProfileId]);
-
+      };
+      snap();
+      return () => {
+        active = false;
+      };
+    }, [lastProfileId]);
+  };
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
       <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
@@ -328,7 +326,7 @@ export const Footer = () => {
   );
 };
 
-// BackButton 컴포넌트
+/// BackButton 컴포넌트
 export const BackButton = ({ onClick, className = "" }) => {
   const navigate = useNavigate();
 

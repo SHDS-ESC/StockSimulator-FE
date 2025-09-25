@@ -115,7 +115,7 @@ const HomePage = () => {
   const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
-  const { email, lastProfileId, clear } = useLoginStore();
+  const { email, lastProfileId } = useLoginStore();
   const [startInvested, setStartInvested] = useState(0);
   const [selectedProfile, setSelectedProfile] = useState({
     id: 0,
@@ -247,43 +247,8 @@ const HomePage = () => {
   }, [isHistorical, dateKey, topFilter, histCache]);
 
   useConfirmLogin(null);
-    // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
-    const loadProfile = useCallback(async () => {
-        try {
-            const list = await fetchProfiles();
-            const totalCurrentPrice = await fetchStocks();
-            // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
-            if (lastProfileId && Number(lastProfileId) > 0) {
-                try {
-                    const response = await axiosInstance.get(
-                        `userprofile/profile/${lastProfileId}`,
-                        { withCredentials: true }
-                    );
-                    setStartInvested(response.data.totalInvested || 0);
-                    setSelectedProfile({
-                        ...response.data,
-                        totalInvested: totalCurrentPrice || 0,
-                    });
-                    localStorage.setItem("newProfile", JSON.stringify(response.data));
-                    setCurrentDate(response.data.processDate);
-                } catch(e) {
-                    console.error("Error fetching active profile:", e);
-                    if (Array.isArray(list) && list.length > 0)
-                        setSelectedProfile(list[0]);
-                }
-            } else if (Array.isArray(list) && list.length > 0) {
-                setSelectedProfile(list[0]);
-            }
-        } catch (error) {
-            console.error("Error loading profiles:", error);
-        }
-    }, [
-        lastProfileId,
-        fetchProfiles,
-        fetchStocks,
-        setCurrentDate,
-        startInvested,
-    ]);
+  // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
+
 
   // 모든 프로필 불러오기
   const fetchProfiles = useCallback(async () => {
@@ -302,8 +267,8 @@ const HomePage = () => {
     }
   }, [email]);
 
-    const fetchStocks = useCallback(async () => {
-        if (!email || String(email).trim() === "") return 0;
+  const fetchStocks = useCallback(async () => {
+    if (!email || String(email).trim() === "") return 0;
     const isoDate =
       currentDate instanceof Date
         ? currentDate.toISOString().slice(0, 10)
@@ -321,13 +286,6 @@ const HomePage = () => {
       return 0;
     }
   }, [email, lastProfileId, currentDate]);
-
-
-
-  useEffect(() => {
-    if (!email || String(email).trim() === "") return;
-    loadProfile();
-  }, [email, lastProfileId, currentDate, loadProfile]);
 
   const handleProfileSelect = (profile) => {
     axiosInstance
@@ -440,478 +398,495 @@ const HomePage = () => {
   const handleCreateProfile = () => {
     navigate("/character");
   };
-
-  const handleLogout = async () => {
+  const loadProfile = useCallback(async () => {
     try {
-      await axiosInstance.post("/user/logout");
-    } catch (_) {
-      /* ignore */
+      const list = await fetchProfiles();
+      const totalCurrentPrice = await fetchStocks();
+      // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
+      if (lastProfileId && Number(lastProfileId) > 0) {
+        try {
+          const response = await axiosInstance.get(
+            `userprofile/profile/${lastProfileId}`,
+            { withCredentials: true }
+          );
+          setStartInvested(response.data.totalInvested || 0);
+          setSelectedProfile({
+            ...response.data,
+            totalInvested: totalCurrentPrice || 0,
+          });
+          localStorage.setItem("newProfile", JSON.stringify(response.data));
+          setCurrentDate(response.data.processDate);
+        } catch (e) {
+          console.error("Error fetching active profile:", e);
+          if (Array.isArray(list) && list.length > 0)
+            setSelectedProfile(list[0]);
+        }
+      } else if (Array.isArray(list) && list.length > 0) {
+        setSelectedProfile(list[0]);
+      }
+    } catch (error) {
+      console.error("Error loading profiles:", error);
     }
-    clear();
-    sessionStorage.removeItem("accessToken");
-    sessionStorage.removeItem("login-store");
-    sessionStorage.removeItem("timeLineList");
-    localStorage.removeItem("newProfile");
-    localStorage.removeItem("date-storage");
-    navigate("/");
-  };
+  }, [
+    lastProfileId,
+    fetchProfiles,
+    fetchStocks,
+    setCurrentDate,
+    startInvested,
+  ]);
+
+  
+  useEffect(() => {
+    if (!email || String(email).trim() === "") return;
+    loadProfile();
+  }, [email, lastProfileId, currentDate, loadProfile]);
 
   return (
     <div className="h-full pt-5 pb-10">
       {/* 전체 콘텐츠 영역 */}
 
-      {/* 자산 정보 섹션 (다크 배경) */}
-      <div className="bg-slate-950 mx-4 rounded-xl p-1 mb-4">
-        {/* 프로필명 */}
-        <div className="mb-4">
-          <div
-            className="flex items-center gap-2 cursor-pointer"
-            onClick={() => setIsProfileModalOpen(true)}
-          >
-            <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
-            <h2 className="text-white text-lg font-semibold">
-              {selectedProfile?.nickname}
-            </h2>
-            <span className="text-gray-400 text-sm">
-              {selectedProfile
-                ? "TimeLine : " + selectedProfile.name
-                : "TimeLine : 없음"}
-            </span>
-          </div>
-        </div>
-      {/* 커스텀 CSS 스타일 추가 */}
-      <style jsx>{shimmerStyles}</style>
+      
+        {/* 커스텀 CSS 스타일 추가 */}
+        <style jsx>{shimmerStyles}</style>
 
-      {/* 자산 정보 섹션 */}
-      <div className="bg-slate-950 mx-4 rounded-xl mb-5">
-        {!selectedProfile?.id || selectedProfile?.id === 0 ? (
-          // Shimmer 스켈레톤 UI
-          <div>
-            {/* 프로필명 스켈레톤 */}
-            <div className="mb-4">
-              <div className="flex items-center gap-2">
-                <ShimmerSkeleton className="w-3 h-3 rounded-full" />
-                <ShimmerSkeleton className="h-5 w-32" />
-                <ShimmerSkeleton className="h-4 w-24" />
-              </div>
-            </div>
-            {/* 총 잔고 스켈레톤 */}
-            <div className="mb-4">
-              <ShimmerSkeleton className="h-9 w-40 mb-2" />
-              <ShimmerSkeleton className="h-4 w-32" />
-            </div>
-            {/* 투자/현금 정보 스켈레톤 */}
-            <div className="flex justify-between mb-4">
-              <div>
-                <ShimmerSkeleton className="h-3 w-8 mb-1" />
-                <ShimmerSkeleton className="h-6 w-20 mb-1" />
-                <ShimmerSkeleton className="h-3 w-24" />
-              </div>
-              <div>
-                <ShimmerSkeleton className="h-3 w-8 mb-1" />
-                <ShimmerSkeleton className="h-6 w-20" />
-              </div>
-            </div>
-            {/* 주문 내역 스켈레톤 */}
-            <div className="flex items-center justify-between">
-              <ShimmerSkeleton className="h-4 w-16" />
-              <ShimmerSkeleton className="w-4 h-4" />
-            </div>
-          </div>
-        ) : (
-          // 실제 데이터
-          <>
-            {/* 프로필명 */}
-            <div className="mb-4">
-              <div
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() => setIsProfileModalOpen(true)}
-              >
-                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                <h2 className="text-white text-lg font-semibold">
-                  {selectedProfile?.nickname}
-                </h2>
-                <span className="text-gray-400 text-sm">
-                  TimeLine : {selectedProfile?.name || "없음"}
-                </span>
-              </div>
-            </div>
-
-            {/* 총 잔고 */}
-            <div className="mb-4">
-              <h3 className="text-white text-3xl font-bold">
-                {formatCurrencyValue(portfolioMetrics.totalCurrent)}
-              </h3>
-              {selectedProfile?.totalAssets > 0 && (
-                <p
-                  className={`text-xs ${getColorClass(portfolioMetrics.overallPL)}`}
-                >
-                  {formatCurrency(portfolioMetrics.overallPL)} (
-                  {formatPercentage(portfolioMetrics.overallPLPercent)})
-                </p>
-              )}
-            </div>
-
-            {/* 투자/현금 정보 */}
-            <div className="flex justify-between mb-4">
-              <div>
-                <p className="text-gray-400 text-xs mb-1">투자</p>
-                <p className="text-white text-lg font-semibold">
-                  {formatCurrencyValue(selectedProfile?.totalInvested)}
-                </p>
-                <p
-                  className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}
-                >
-                  {formatCurrency(portfolioMetrics.investmentPL)} (
-                  {formatPercentage(portfolioMetrics.investmentPLPercent)})
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-400 text-xs mb-1">현금</p>
-                <p className="text-white text-lg font-semibold">
-                  {formatCurrencyValue(selectedProfile?.cashBalance)}
-                </p>
-              </div>
-            </div>
-
-        {/* 주문 내역 */}
-        <div
-          className="flex items-center justify-between cursor-pointer hover:bg-slate-700 rounded-lg p-2 transition-colors"
-          onClick={() => navigate("/orderhistory")}
-        >
-          <span className="text-white text-sm">주문 내역</span>
-          <ChevronRight className="w-4 h-4 text-white" />
-        </div>
-          </>
-        )}
-      </div>
-
-      {/* 보유 주식 섹션 */}
-      <div className="bg-slate-950 px-4 py-2">
-        <div className="bg-slate-800 rounded-xl p-3">
-          <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
-          {!selectedProfile?.id ||
-          selectedProfile?.id === 0 ||
-          holdingStocks.length === 0 ? (
+        {/* 자산 정보 섹션 */}
+        <div className="bg-slate-950 mx-4 rounded-xl mb-5">
+          {!selectedProfile?.id || selectedProfile?.id === 0 ? (
             // Shimmer 스켈레톤 UI
-            <div className="space-y-2">
-              {[...Array(3)].map((_, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
-                    <div>
-                      <ShimmerSkeleton className="h-4 w-20 mb-1" />
+            <div>
+              {/* 프로필명 스켈레톤 */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2">
+                  <ShimmerSkeleton className="w-3 h-3 rounded-full" />
+                  <ShimmerSkeleton className="h-5 w-32" />
+                  <ShimmerSkeleton className="h-4 w-24" />
+                </div>
+              </div>
+              {/* 총 잔고 스켈레톤 */}
+              <div className="mb-4">
+                <ShimmerSkeleton className="h-9 w-40 mb-2" />
+                <ShimmerSkeleton className="h-4 w-32" />
+              </div>
+              {/* 투자/현금 정보 스켈레톤 */}
+              <div className="flex justify-between mb-4">
+                <div>
+                  <ShimmerSkeleton className="h-3 w-8 mb-1" />
+                  <ShimmerSkeleton className="h-6 w-20 mb-1" />
+                  <ShimmerSkeleton className="h-3 w-24" />
+                </div>
+                <div>
+                  <ShimmerSkeleton className="h-3 w-8 mb-1" />
+                  <ShimmerSkeleton className="h-6 w-20" />
+                </div>
+              </div>
+              {/* 주문 내역 스켈레톤 */}
+              <div className="flex items-center justify-between">
+                <ShimmerSkeleton className="h-4 w-16" />
+                <ShimmerSkeleton className="w-4 h-4" />
+              </div>
+            </div>
+          ) : (
+            // 실제 데이터
+            <>
+              {/* 프로필명 */}
+              <div className="mb-4">
+                <div
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() => setIsProfileModalOpen(true)}
+                >
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <h2 className="text-white text-lg font-semibold">
+                    {selectedProfile?.nickname}
+                  </h2>
+                  <span className="text-gray-400 text-sm">
+                    TimeLine : {selectedProfile?.name || "없음"}
+                  </span>
+                </div>
+              </div>
+
+              {/* 총 잔고 */}
+              <div className="mb-4">
+                <h3 className="text-white text-3xl font-bold">
+                  {formatCurrencyValue(portfolioMetrics.totalCurrent)}
+                </h3>
+                {selectedProfile?.totalAssets > 0 && (
+                  <p
+                    className={`text-xs ${getColorClass(portfolioMetrics.overallPL)}`}
+                  >
+                    {formatCurrency(portfolioMetrics.overallPL)} (
+                    {formatPercentage(portfolioMetrics.overallPLPercent)})
+                  </p>
+                )}
+              </div>
+
+              {/* 투자/현금 정보 */}
+              <div className="flex justify-between mb-4">
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">투자</p>
+                  <p className="text-white text-lg font-semibold">
+                    {formatCurrencyValue(selectedProfile?.totalInvested)}
+                  </p>
+                  <p
+                    className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}
+                  >
+                    {formatCurrency(portfolioMetrics.investmentPL)} (
+                    {formatPercentage(portfolioMetrics.investmentPLPercent)})
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">현금</p>
+                  <p className="text-white text-lg font-semibold">
+                    {formatCurrencyValue(selectedProfile?.cashBalance)}
+                  </p>
+                </div>
+              </div>
+
+              {/* 주문 내역 */}
+              <div
+                className="flex items-center justify-between cursor-pointer hover:bg-slate-700 rounded-lg p-2 transition-colors"
+                onClick={() => navigate("/orderhistory")}
+              >
+                <span className="text-white text-sm">주문 내역</span>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 보유 주식 섹션 */}
+        <div className="bg-slate-950 px-4 py-2">
+          <div className="bg-slate-800 rounded-xl p-3">
+            <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
+            {!selectedProfile?.id ||
+            selectedProfile?.id === 0 ||
+            holdingStocks.length === 0 ? (
+              // Shimmer 스켈레톤 UI
+              <div className="space-y-2">
+                {[...Array(3)].map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
+                      <div>
+                        <ShimmerSkeleton className="h-4 w-20 mb-1" />
+                        <ShimmerSkeleton className="h-3 w-12" />
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <ShimmerSkeleton className="h-3 w-8 mb-2" />
+                      <ShimmerSkeleton className="h-4 w-16 mb-1" />
+                      <ShimmerSkeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {holdingStocks
+                  .filter((stock) => stock.quantity && stock.quantity > 0)
+                  .map((stock, index) => (
+                    <button
+                      className="w-full"
+                      onClick={() => navigate(`/stocks/${stock.ticker}`)}
+                    >
+                      {" "}
+                      <div
+                        key={index}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
+                            <img
+                              src={stock.logo}
+                              alt={stock.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <span className="text-gray-600 font-bold text-xs hidden">
+                              {stock.ticker}
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium text-sm">
+                              {stock.name}
+                            </h4>
+                            <p className="text-gray-400 text-xs text-start">
+                              {stock.ticker}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white font-semibold text-[10px] mb-2">
+                            {(stock.quantity || 0).toLocaleString("en-US")}주
+                          </p>
+                          <p className="text-white font-semibold text-sm">
+                            {formatCurrencyValue(stock.price)}
+                          </p>
+                          <p
+                            className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}
+                          >
+                            {formatCurrency(stock.changeAmount)} (
+                            {formatPercentage(stock.change)})
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* TOP3 섹션 */}
+        <div className="bg-slate-950 px-4 py-2">
+          <div className="bg-slate-800 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white text-lg font-semibold">
+                {topFilter === "rising"
+                  ? "상승률 TOP3"
+                  : topFilter === "falling"
+                    ? "하락률 TOP3"
+                    : "거래량 TOP3"}
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTopFilter("rising")}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === "rising"
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  상승률
+                </button>
+                <button
+                  onClick={() => setTopFilter("falling")}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === "falling"
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  하락률
+                </button>
+                <button
+                  onClick={() => setTopFilter("volume")}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === "volume"
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  거래량
+                </button>
+              </div>
+            </div>
+
+            {(isHistorical ? histLoading : stocksLoading) ? (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
+                      <div>
+                        <ShimmerSkeleton className="h-4 w-20 mb-1" />
+                        <ShimmerSkeleton className="h-3 w-16" />
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <ShimmerSkeleton className="h-4 w-16 mb-1" />
                       <ShimmerSkeleton className="h-3 w-12" />
                     </div>
                   </div>
-                  <div className="text-right">
-                    <ShimmerSkeleton className="h-3 w-8 mb-2" />
-                    <ShimmerSkeleton className="h-4 w-16 mb-1" />
-                    <ShimmerSkeleton className="h-3 w-20" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {holdingStocks
-                .filter((stock) => stock.quantity && stock.quantity > 0)
-                .map((stock, index) => (
-                  <button
-                    className="w-full"
-                    onClick={() => navigate(`/stocks/${stock.ticker}`)}
-                  >
-                    {" "}
+                ))}
+              </div>
+            ) : (isHistorical ? histError : stocksError) ? (
+              <div className="text-center py-4">
+                <p className="text-red-400 text-sm">
+                  {isHistorical ? histError : stocksError}
+                </p>
+              </div>
+            ) : (
+                isHistorical
+                  ? histTop.length === 0
+                  : selectedRtList.length === 0
+              ) ? (
+              <div className="text-center py-4">
+                <p className="text-gray-400 text-sm">
+                  {isHistorical
+                    ? "데이터를 불러올 수 없습니다"
+                    : "실시간 데이터 준비중"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {(isHistorical ? histTop : selectedRtList).map(
+                  (stock, index) => (
                     <div
-                      key={index}
-                      className="flex items-center justify-between"
+                      key={`trending-${stock.symbol}-${index}`}
+                      className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
+                      onClick={() =>
+                        navigate(
+                          `/stocks/${encodeURIComponent(String(stock.symbol || ""))}`
+                        )
+                      }
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
                           <img
-                            src={stock.logo}
+                            src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
                             alt={stock.name}
                             className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
                           />
                           <span className="text-gray-600 font-bold text-xs hidden">
-                            {stock.ticker}
+                            {stock.symbol}
                           </span>
                         </div>
                         <div>
                           <h4 className="text-white font-medium text-sm">
                             {stock.name}
                           </h4>
-                          <p className="text-gray-400 text-xs text-start">
-                            {stock.ticker}
+                          <p className="text-gray-400 text-xs">
+                            {stock.symbol}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-white font-semibold text-[10px] mb-2">
-                          {(stock.quantity || 0).toLocaleString("en-US")}주
-                        </p>
+                        {/* 1줄: 가격 */}
                         <p className="text-white font-semibold text-sm">
                           {formatCurrencyValue(stock.price)}
                         </p>
-                        <p
-                          className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}
-                        >
-                          {formatCurrency(stock.changeAmount)} (
-                          {formatPercentage(stock.change)})
+
+                        {/* 2줄: 변동값 + 퍼센트 */}
+                        <p className="text-xs font-medium">
+                          <span
+                            className={getColorClass(
+                              parseNumericValue(stock.change)
+                            )}
+                          >
+                            {formatCurrency(stock.change)}
+                          </span>
+                          <span
+                            className={getColorClass(
+                              parseNumericValue(stock.changePercent)
+                            )}
+                          >
+                            ({formatPercentage(stock.changePercent)})
+                          </span>
                         </p>
+
+                        {/* 3줄: 거래량 */}
+                        {topFilter === "volume" && (
+                          <p className="text-xs text-gray-400">
+                            거래량: {formatVolume(stock.volume)}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  </button>
-                ))}
-            </div>
-          )}
-        </div>
-      </div>
+                  )
+                )}
+              </div>
+            )}
 
-      {/* TOP3 섹션 */}
-      <div className="bg-slate-950 px-4 py-2">
-        <div className="bg-slate-800 rounded-xl p-3">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-white text-lg font-semibold">
-              {topFilter === "rising"
-                ? "상승률 TOP3"
-                : topFilter === "falling"
-                  ? "하락률 TOP3"
-                  : "거래량 TOP3"}
-            </h3>
-            <div className="flex gap-2">
+            <div className="mt-3 pt-3 border-t border-slate-600">
               <button
-                onClick={() => setTopFilter("rising")}
-                className={`px-2 py-1 rounded-md text-xs font-medium ${
-                  topFilter === "rising"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700 text-gray-200"
-                }`}
+                onClick={() => navigate("/stocks")}
+                className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
               >
-                상승률
-              </button>
-              <button
-                onClick={() => setTopFilter("falling")}
-                className={`px-2 py-1 rounded-md text-xs font-medium ${
-                  topFilter === "falling"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700 text-gray-200"
-                }`}
-              >
-                하락률
-              </button>
-              <button
-                onClick={() => setTopFilter("volume")}
-                className={`px-2 py-1 rounded-md text-xs font-medium ${
-                  topFilter === "volume"
-                    ? "bg-red-500 text-white"
-                    : "bg-slate-700 text-gray-200"
-                }`}
-              >
-                거래량
+                더 많은 주식목록보기
               </button>
             </div>
           </div>
+        </div>
 
-          {(isHistorical ? histLoading : stocksLoading) ? (
-            <div className="space-y-2">
-              {[...Array(3)].map((_, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-2"
-                >
-                  <div className="flex items-center gap-3">
-                    <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
-                    <div>
-                      <ShimmerSkeleton className="h-4 w-20 mb-1" />
-                      <ShimmerSkeleton className="h-3 w-16" />
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <ShimmerSkeleton className="h-4 w-16 mb-1" />
-                    <ShimmerSkeleton className="h-3 w-12" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (isHistorical ? histError : stocksError) ? (
-            <div className="text-center py-4">
-              <p className="text-red-400 text-sm">
-                {isHistorical ? histError : stocksError}
-              </p>
-            </div>
-          ) : (
-              isHistorical ? histTop.length === 0 : selectedRtList.length === 0
-            ) ? (
-            <div className="text-center py-4">
-              <p className="text-gray-400 text-sm">
-                {isHistorical
-                  ? "데이터를 불러올 수 없습니다"
-                  : "실시간 데이터 준비중"}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-
-              {(isHistorical ? histTop : selectedRtList).map((stock, index) => (
-                <div
-                  key={`trending-${stock.symbol}-${index}`}
-                  className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
-                  onClick={() =>
-                    navigate(
-                      `/stocks/${encodeURIComponent(String(stock.symbol || ""))}`
-                    )
-                  }
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
-                      <img
-                        src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                        alt={stock.name}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                          e.target.nextSibling.style.display = "flex";
-                        }}
-                      />
-                      <span className="text-gray-600 font-bold text-xs hidden">
-                        {stock.symbol}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="text-white font-medium text-sm">
-                        {stock.name}
-                      </h4>
-                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    {/* 1줄: 가격 */}
-                    <p className="text-white font-semibold text-sm">
-                      {formatCurrencyValue(stock.price)}
-                    </p>
-
-                    {/* 2줄: 변동값 + 퍼센트 */}
-                    <p className="text-xs font-medium">
-                      <span
-                        className={getColorClass(
-                          parseNumericValue(stock.change)
-                        )}
-                      >
-                        {formatCurrency(stock.change)}
-                      </span>
-                      <span
-                        className={getColorClass(
-                          parseNumericValue(stock.changePercent)
-                        )}
-                      >
-                        ({formatPercentage(stock.changePercent)})
-                      </span>
-                    </p>
-
-                    {/* 3줄: 거래량 */}
-                    {topFilter === "volume" && (
-                      <p className="text-xs text-gray-400">
-                        거래량: {formatVolume(stock.volume)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-3 pt-3 border-t border-slate-600">
-            <button
-              onClick={() => navigate("/stocks")}
-              className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
+        {/* 프로필 선택 모달 */}
+        {isProfileModalOpen && (
+          <div className="absolute inset-0 bg-black bg-opacity-60 z-50 flex items-end">
+            <div
+              className="w-full max-w-md mx-auto bg-slate-900 rounded-t-3xl transform transition-transform duration-300 ease-out"
+              style={{ maxHeight: "600px" }}
             >
-              더 많은 주식목록보기
-            </button>
-          </div>
-        </div>
-      </div>
+              <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4"></div>
 
-      {/* 프로필 선택 모달 */}
-      {isProfileModalOpen && (
-        <div className="absolute inset-0 bg-black bg-opacity-60 z-50 flex items-end">
-          <div
-            className="w-full max-w-md mx-auto bg-slate-900 rounded-t-3xl transform transition-transform duration-300 ease-out"
-            style={{ maxHeight: "600px" }}
-          >
-            <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4"></div>
+              <div className="px-6 pb-4 border-b border-slate-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white text-xl font-semibold">
+                    프로필 선택
+                  </h3>
+                  <button
+                    onClick={() => setIsProfileModalOpen(false)}
+                    className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center active:scale-90 transition-transform touch-manipulation"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+              </div>
 
-            <div className="px-6 pb-4 border-b border-slate-700">
-              <div className="flex items-center justify-between">
-                <h3 className="text-white text-xl font-semibold">
-                  프로필 선택
-                </h3>
+              <div
+                className="px-6 py-4 space-y-3 overflow-y-auto scrollbar-hide"
+                style={{ maxHeight: "400px" }}
+              >
+                {profiles.map((profile) => (
+                  <div
+                    key={profile.id}
+                    onClick={() => handleProfileSelect(profile)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
+                      profile.id === selectedProfile.id
+                        ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
+                        : "bg-slate-800 border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          {profile.id === selectedProfile.id && (
+                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                          )}
+                          <h4 className="text-white font-semibold text-base">
+                            {profile.nickname}
+                          </h4>
+                          {profile.id === selectedProfile.id && (
+                            <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium">
+                              활성
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-sm mt-1">
+                          {profile.name}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-white font-semibold text-base">
+                          {formatCurrencyValue(profile.cashBalance)}
+                        </p>
+
+                        <p className="text-gray-400 text-xs">총자산</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-700">
                 <button
-                  onClick={() => setIsProfileModalOpen(false)}
-                  className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center active:scale-90 transition-transform touch-manipulation"
+                  onClick={handleCreateProfile}
+                  className="w-full p-4 bg-slate-800 rounded-2xl border border-slate-600 border-dashed text-gray-400 font-medium active:scale-[0.98] transition-all touch-manipulation"
                 >
-                  <X className="w-5 h-5 text-white" />
+                  + 새 프로필 추가
                 </button>
               </div>
             </div>
-
-            <div
-              className="px-6 py-4 space-y-3 overflow-y-auto scrollbar-hide"
-              style={{ maxHeight: "400px" }}
-            >
-              {profiles.map((profile) => (
-                <div
-                  key={profile.id}
-                  onClick={() => handleProfileSelect(profile)}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
-                    profile.id === selectedProfile.id
-                      ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
-                      : "bg-slate-800 border-slate-700"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        {profile.id === selectedProfile.id && (
-                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                        )}
-                        <h4 className="text-white font-semibold text-base">
-                          {profile.nickname}
-                        </h4>
-                        {profile.id === selectedProfile.id && (
-                          <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium">
-                            활성
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-gray-400 text-sm mt-1">
-                        {profile.name}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-white font-semibold text-base">
-                        {formatCurrencyValue(profile.cashBalance)}
-                      </p>
-
-                      <p className="text-gray-400 text-xs">총자산</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="px-6 py-4 border-t border-slate-700">
-              <button
-                onClick={handleCreateProfile}
-                className="w-full p-4 bg-slate-800 rounded-2xl border border-slate-600 border-dashed text-gray-400 font-medium active:scale-[0.98] transition-all touch-manipulation"
-              >
-                + 새 프로필 추가
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
   );
 };
 

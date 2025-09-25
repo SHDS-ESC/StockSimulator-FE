@@ -157,7 +157,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, setCurrentDate, skipNotice, goNextTurn } = useDateStore();
+  const { isTurnOver, currentDate, skipNotice, goNextTurn } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
@@ -428,7 +428,7 @@ useEffect(() => {
 
                     {/* 투자 손익 */}
                     <div className="flex justify-between">
-                      <span className="font-semibold">투자 손익</span>
+                      <span className="font-semibold">투자금</span>
                       <div className="flex flex-col text-end">
                         <span
                           className={`font-bold `}
