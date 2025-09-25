@@ -114,11 +114,12 @@ const HomePage = () => {
       return;
     }
 
-    const sortParam = topFilter === "rising"
-      ? "changePercent,desc"
-      : topFilter === "falling"
-      ? "changePercent,asc"
-      : "volume,desc";
+    const sortParam =
+      topFilter === "rising"
+        ? "changePercent,desc"
+        : topFilter === "falling"
+          ? "changePercent,asc"
+          : "volume,desc";
 
     const run = async () => {
       setHistLoading(true);
@@ -421,7 +422,8 @@ const HomePage = () => {
                 <p
                   className={`text-xs ${diffPrice > 0 ? "text-red-500" : "text-blue-400"}`}
                 >
-                  {diffPrice > 0 ? "+" : ""}${diffPrice} ({diffPrice > 0 ? "+" : ""}
+                  {diffPrice > 0 ? "+" : ""}${diffPrice} (
+                  {diffPrice > 0 ? "+" : ""}
                   {diffPercent}%)
                 </p>
               );
@@ -443,9 +445,20 @@ const HomePage = () => {
                   : "text-blue-400"
               }`}
             >
-              {((selectedProfile.totalInvested - startInvested) /startInvested) *100 >0 ? "+": ""}
-              ${(selectedProfile.totalInvested - startInvested).toFixed(2)} ({selectedProfile.totalInvested - startInvested > 0 ? "+" : ""}
-              {(((selectedProfile.totalInvested - startInvested) /startInvested) *100).toFixed(2)}%)
+              {((selectedProfile.totalInvested - startInvested) /
+                startInvested) *
+                100 >
+              0
+                ? "+"
+                : ""}
+              ${(selectedProfile.totalInvested - startInvested).toFixed(2)} (
+              {selectedProfile.totalInvested - startInvested > 0 ? "+" : ""}
+              {(
+                ((selectedProfile.totalInvested - startInvested) /
+                  startInvested) *
+                100
+              ).toFixed(2)}
+              %)
             </p>
           </div>
           <div>
@@ -457,7 +470,10 @@ const HomePage = () => {
         </div>
 
         {/* 주문 내역 */}
-        <div className="flex items-center justify-between">
+        <div
+          className="flex items-center justify-between cursor-pointer hover:bg-slate-700 rounded-lg p-2 transition-colors"
+          onClick={() => navigate("/orderhistory")}
+        >
           <span className="text-white text-sm">주문 내역</span>
           <ChevronRight className="w-4 h-4 text-white" />
         </div>
@@ -518,7 +534,11 @@ const HomePage = () => {
         <div className="bg-slate-800 rounded-xl p-3">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-white text-lg font-semibold">
-              {topFilter === "rising" ? "상승률 TOP3" : topFilter === "falling" ? "하락률 TOP3" : "거래량 TOP3"}
+              {topFilter === "rising"
+                ? "상승률 TOP3"
+                : topFilter === "falling"
+                  ? "하락률 TOP3"
+                  : "거래량 TOP3"}
             </h3>
             <div className="flex gap-2">
               <button
@@ -592,70 +612,72 @@ const HomePage = () => {
             </div>
           ) : (
             <div className="space-y-2">
-              {(isHistorical ? histTop : selectedRtList).map(
-                (stock, index) => (
-                  <div
-                    key={`trending-${stock.symbol}-${index}`}
-                    className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
-                    onClick={() => navigate(`/stocks/${encodeURIComponent(String(stock.symbol || ""))}`)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
-                        <img
-                          src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
-                          alt={stock.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextSibling.style.display = "flex";
-                          }}
-                        />
-                        <span className="text-gray-600 font-bold text-xs hidden">
-                          {stock.symbol}
-                        </span>
-                      </div>
-                      <div>
-                        <h4 className="text-white font-medium text-sm">
-                          {stock.name}
-                        </h4>
-                        <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                      </div>
+              {(isHistorical ? histTop : selectedRtList).map((stock, index) => (
+                <div
+                  key={`trending-${stock.symbol}-${index}`}
+                  className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
+                  onClick={() =>
+                    navigate(
+                      `/stocks/${encodeURIComponent(String(stock.symbol || ""))}`
+                    )
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm overflow-hidden">
+                      <img
+                        src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                        alt={stock.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                      <span className="text-gray-600 font-bold text-xs hidden">
+                        {stock.symbol}
+                      </span>
                     </div>
-                    <div className="text-right">
-                      <p className="text-white font-semibold text-sm">
-                        {String(stock.price).startsWith("$")
-                          ? String(stock.price)
-                          : `$${String(stock.price)}`}
-                      </p>
-                      <div className="flex items-center gap-1">
-                        <p
-                          className={`text-xs font-medium ${
-                            String(stock.change).includes("+")
-                              ? "text-red-500"
-                              : "text-blue-500"
-                          }`}
-                        >
-                          {String(stock.change)}
-                        </p>
-                        <p
-                          className={`text-xs ${
-                            String(stock.changePercent || "").includes("+")
-                              ? "text-red-500"
-                              : "text-blue-500"
-                          }`}
-                        >
-                          ({String(stock.changePercent)})
-                        </p>
-                        {topFilter === "volume" && (
-                          <p className="text-xs text-gray-400 ml-1">
-                            거래량: {formatVolume(stock.volume)}
-                          </p>
-                        )}
-                      </div>
+                    <div>
+                      <h4 className="text-white font-medium text-sm">
+                        {stock.name}
+                      </h4>
+                      <p className="text-gray-400 text-xs">{stock.symbol}</p>
                     </div>
                   </div>
-                )
-              )}
+                  <div className="text-right">
+                    <p className="text-white font-semibold text-sm">
+                      {String(stock.price).startsWith("$")
+                        ? String(stock.price)
+                        : `$${String(stock.price)}`}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <p
+                        className={`text-xs font-medium ${
+                          String(stock.change).includes("+")
+                            ? "text-red-500"
+                            : "text-blue-500"
+                        }`}
+                      >
+                        {String(stock.change)}
+                      </p>
+                      <p
+                        className={`text-xs ${
+                          String(stock.changePercent || "").includes("+")
+                            ? "text-red-500"
+                            : "text-blue-500"
+                        }`}
+                      >
+                        ({String(stock.changePercent)})
+                      </p>
+                      {topFilter === "volume" && (
+                        <p className="text-xs text-gray-400 ml-1">
+                          거래량: {formatVolume(stock.volume)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
           {/* 더 많은 주식목록보기 버튼 */}
