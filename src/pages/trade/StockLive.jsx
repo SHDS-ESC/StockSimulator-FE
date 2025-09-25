@@ -440,7 +440,7 @@ export default function StockLive() {
               <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
                 <h4 className="text-white font-semibold mb-2">RSI(14)</h4>
                 <p className="text-gray-300 mb-3">
-                  70↑ 과매수, 30↓ 과매도. 추세장에서는 과열 구간 지속 가능—다이버전스(가격↑, RSI↓)를 함께 체크하세요.
+                  70↑ 과매수, 30↓ 과매도. 강한 상승장에서는 70 이상이 계속 유지될 수 있으니, 주가는 오르는데 RSI가 떨어지는 '힘 빠짐 신호'를 주의깊게 봐야 합니다.
                 </p>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">

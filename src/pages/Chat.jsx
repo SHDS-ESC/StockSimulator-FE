@@ -151,12 +151,12 @@ const PredictionChart = ({ historical = [], predictions = [] }) => {
       // 시리즈
       const historicalSeries = chart.addLineSeries({
         color: '#3b82f6', lineWidth: 2,
-        lastValueVisible: false, priceLineVisible: false,
+        lastValueVisible: true, priceLineVisible: false,
         crosshairMarkerVisible: false, lastPriceAnimation: 0,
       });
       const predictionSeries = chart.addLineSeries({
         color: '#22c55e', lineWidth: 2, lineStyle: LW.LineStyle.Dashed,
-        lastValueVisible: false, priceLineVisible: false,
+        lastValueVisible: true, priceLineVisible: false,
         crosshairMarkerVisible: false, lastPriceAnimation: 0,
       });
 
@@ -287,6 +287,64 @@ const Chat = () => {
 
   // 모달 상태 관리
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
+  const [metricDetail, setMetricDetail] = useState(null);
+  const METRIC_DETAILS = {
+    current_price: {
+      title: '현재가격',
+      content: '',
+      noContent: true
+    },
+    predicted_avg_price: {
+      title: '예상평균가격',
+      content: '',
+      noContent: true
+    },
+    expected_total_return: {
+      title: '총 수익률',
+      content: '',
+      noContent: true
+    },
+    expected_avg_daily_return: {
+      title: '일평균 수익률',
+      content: '',
+      noContent: true
+    },
+    var_95: {
+      title: 'VaR (95%)',
+      content: `정상적인 시장 상황에서, 95%의 확률로 발생할 수 있는 최대 손실률을 의미합니다.
+
+쉽게 말해, "100번 투자하면 95번은 이 값 안에서 손실이 통제되지만, 5번은 그보다 훨씬 큰 손실이 날 수 있다"는 위험의 경계선입니다.
+
+내가 감당해야 할 위험의 크기를 가늠하는 중요한 온도계 역할을 합니다.`,
+      isSpecial: true,
+      type: 'risk'
+    },
+    max_expected_loss: {
+      title: '최대손실',
+      content: '예측 기간 내 최악의 시나리오 손실률입니다.\n포트폴리오 비중 조정과 손실 한계 설정에 활용합니다.'
+    },
+      estimated_sharpe_ratio: {
+        title: '샤프비율',
+        content: `투자의 위험 대비 수익성을 측정하는 핵심 지표입니다.
+
+간단히 말해, "내가 감수한 위험 1단위당, 무위험 투자보다 얼마나 더 높은 수익을 얻었는가?"를 알려주는 숫자입니다.
+
+즉, 위험을 얼마나 효율적으로 관리하며 수익을 냈는지를 평가하는 것입니다.`,
+        isSpecial: true
+      },
+    predicted_max_price: {
+      title: '예측 최고가',
+      content: '정의: 예측 구간에서의 최고 예상 가격입니다.\n투자 활용: 목표가/청산가 상단 후보로 활용합니다.'
+    },
+    predicted_min_price: {
+      title: '예측 최저가',
+      content: '정의: 예측 구간에서의 최저 예상 가격입니다.\n투자 활용: 손절가/재진입가 하단 후보로 활용합니다.'
+    },
+    predicted_volatility: {
+      title: '예측 변동성',
+      content: '정의: 예측 구간 동안의 가격 변동성 추정치입니다.\n투자 활용: 포지션 크기와 손절 폭(ATR 유사)을 산정하는 기준으로 사용합니다.'
+    },
+  };
 
   // API 호출 함수
   const handleSimulationSubmit = async () => {
@@ -972,25 +1030,37 @@ const Chat = () => {
                   <div className="text-sm font-medium text-white mb-3">핵심 지표</div>
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
-                      <Tooltip content="현재 주식의 실시간 가격입니다. 예측 분석의 기준점이 되는 가격입니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">현재가격</div>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.current_price)}
+                        className="text-gray-400 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        현재가격
+                      </button>
                       <div className="text-white font-medium">
                         ${(simulation.result.investment_analysis.metrics?.current_price || simulation.result.last_price)?.toFixed(2) || 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <Tooltip content="AI가 예측하는 향후 기간의 평균 주가입니다. 현재가와 비교하여 상승/하락 여부를 판단할 수 있습니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">예상평균가격</div>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.predicted_avg_price)}
+                        className="text-gray-400 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        예상평균가격
+                      </button>
                       <div className="text-white font-medium">
                         ${simulation.result.investment_analysis.metrics?.predicted_avg_price?.toFixed(2) || 'N/A'}
                       </div>
                     </div>
                     <div>
-                      <Tooltip content="투자 기간 동안 예상되는 총 수익률입니다. 배당금과 주가 상승분을 모두 포함한 수치입니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">기대수익률</div>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.expected_total_return)}
+                        className="text-gray-400 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        기대수익률
+                      </button>
                       <div className={`font-medium ${
                         (simulation.result.investment_analysis.metrics?.expected_total_return || 0) >= 0 
                           ? 'text-green-400' 
@@ -1010,25 +1080,37 @@ const Chat = () => {
                   <div className="text-sm font-medium text-white mb-3">리스크 지표</div>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <Tooltip content="VaR (Value at Risk): 95% 신뢰도에서 하루 동안 발생할 수 있는 최대 손실률입니다. 예를 들어 -2.5%라면 95%의 확률로 하루 손실이 2.5%를 넘지 않는다는 의미입니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">VaR (95%)</div>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.var_95)}
+                        className="text-gray-400 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        VaR (95%)
+                      </button>
                       <div className="text-red-400 font-medium">
                         {(simulation.result.investment_analysis.risk_metrics.var_95 * 100)?.toFixed(1)}%
                       </div>
                     </div>
                     <div>
-                      <Tooltip content="최대 예상 손실: 예측 기간 동안 발생할 수 있는 최악의 시나리오에서의 손실률입니다. 투자 전 리스크 허용 범위를 확인하는 데 중요한 지표입니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">최대손실</div>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.max_expected_loss)}
+                        className="text-gray-400 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        최대손실
+                      </button>
                       <div className="text-red-400 font-medium">
                         {simulation.result.investment_analysis.risk_metrics.max_expected_loss?.toFixed(1)}%
                       </div>
                     </div>
                     <div>
-                      <Tooltip content="샤프 비율: 위험 대비 수익률을 나타내는 지표입니다. 1.0 이상이면 좋은 투자, 2.0 이상이면 매우 우수한 투자로 평가됩니다. 높을수록 같은 위험 대비 더 높은 수익을 의미합니다.">
-                        <div className="text-gray-400 border-b border-dotted border-gray-500">샤프비율</div>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.estimated_sharpe_ratio)}
+                        className="text-gray-400 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        샤프비율
+                      </button>
                       <div className="text-white font-medium">
                         {simulation.result.investment_analysis.risk_metrics.estimated_sharpe_ratio?.toFixed(2)}
                       </div>
@@ -1086,13 +1168,25 @@ const Chat = () => {
                   {simulation.result.investment_analysis?.metrics && (
                     <div className="grid grid-cols-2 gap-3 text-xs mb-3">
                       <div className="bg-green-900/30 border border-green-700 rounded p-3 text-center">
-                        <div className="text-green-400 mb-1">예측 최고가</div>
+                        <button
+                          type="button"
+                          onClick={() => setMetricDetail(METRIC_DETAILS.predicted_max_price)}
+                          className="text-green-400 mb-1 border-b border-dotted border-green-500 hover:text-green-300"
+                        >
+                          예측 최고가
+                        </button>
                         <div className="text-white font-medium">
                           ${simulation.result.investment_analysis.metrics.predicted_max_price?.toFixed(2) || 'N/A'}
                         </div>
                       </div>
                       <div className="bg-red-900/30 border border-red-700 rounded p-3 text-center">
-                        <div className="text-red-400 mb-1">예측 최저가</div>
+                        <button
+                          type="button"
+                          onClick={() => setMetricDetail(METRIC_DETAILS.predicted_min_price)}
+                          className="text-red-400 mb-1 border-b border-dotted border-red-500 hover:text-red-300"
+                        >
+                          예측 최저가
+                        </button>
                         <div className="text-white font-medium">
                           ${simulation.result.investment_analysis.metrics.predicted_min_price?.toFixed(2) || 'N/A'}
                         </div>
@@ -1100,18 +1194,7 @@ const Chat = () => {
                     </div>
                   )}
                   
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div className="bg-slate-600 rounded p-3 text-center">
-                      <div className="text-gray-400 mb-1">총 수익률</div>
-                      <div className={`font-medium ${
-                        simulation.result.return_predictions[simulation.result.return_predictions.length - 1] >= 0 
-                          ? 'text-emerald-400' 
-                          : 'text-red-400'
-                      }`}>
-                        {simulation.result.return_predictions[simulation.result.return_predictions.length - 1] >= 0 ? '+' : ''}
-                        {simulation.result.return_predictions[simulation.result.return_predictions.length - 1]?.toFixed(2)}%
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 gap-3 text-xs">
                     <div className="bg-slate-600 rounded p-3 text-center">
                       <div className="text-gray-400 mb-1">일평균 수익률</div>
                       <div className={`font-medium ${
@@ -1151,7 +1234,13 @@ const Chat = () => {
                   </div>
                   {simulation.result.investment_analysis?.metrics?.predicted_volatility && (
                     <div className="mt-3 text-center">
-                      <div className="text-gray-400 text-xs mb-1">예측 변동성</div>
+                      <button
+                        type="button"
+                        onClick={() => setMetricDetail(METRIC_DETAILS.predicted_volatility)}
+                        className="text-gray-400 text-xs mb-1 border-b border-dotted border-gray-500 hover:text-white"
+                      >
+                        예측 변동성
+                      </button>
                       <div className="text-yellow-400 font-medium">
                         {simulation.result.investment_analysis.metrics.predicted_volatility.toFixed(2)}%
                       </div>
@@ -1180,6 +1269,205 @@ const Chat = () => {
                   </div>
                 </div>
               )}
+
+  {/* 지표 상세 모달 */}
+  {metricDetail && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+        onClick={() => setMetricDetail(null)}
+      />
+      <div className="relative bg-slate-800 rounded-2xl shadow-2xl w-[90vw] max-w-md mx-4">
+        <div className="sticky top-0 bg-slate-800 border-b border-slate-700 px-6 py-4 rounded-t-2xl flex items-center justify-between">
+          <h3 className="text-white font-bold text-base">{metricDetail.title}</h3>
+          <button onClick={() => setMetricDetail(null)} className="text-gray-400 hover:text-white text-sm">닫기</button>
+        </div>
+        <div className="p-6 space-y-4">
+          {/* 핵심 지표 - 내용 없음 */}
+          {metricDetail.noContent && (
+            <div className="text-center py-8">
+              <div className="text-2xl mb-2">📊</div>
+              <div className="text-lg font-medium text-white">{metricDetail.title}</div>
+              <div className="text-sm text-gray-400 mt-2">클릭하여 확인하세요</div>
+            </div>
+          )}
+
+          {/* 샤프비율 특별 처리 */}
+          {metricDetail.isSpecial && metricDetail.title === '샤프비율' && (
+            <div className="space-y-4">
+              {/* 샤프비율 시각적 표시 */}
+              <div className="bg-slate-700 rounded-lg p-4">
+                <div className="text-sm text-white font-medium mb-3">샤프비율 구간별 평가</div>
+                
+                {/* 구간 표시 바 */}
+                <div className="relative bg-slate-600 rounded-full h-6 mb-3">
+                  {/* 구간별 색상 */}
+                  <div className="absolute left-0 top-0 w-1/4 h-full bg-red-500 rounded-l-full"></div>
+                  <div className="absolute left-1/4 top-0 w-1/4 h-full bg-yellow-500"></div>
+                  <div className="absolute left-1/2 top-0 w-1/4 h-full bg-green-500"></div>
+                  <div className="absolute left-3/4 top-0 w-1/4 h-full bg-blue-500 rounded-r-full"></div>
+                  
+                  {/* 현재값 화살표 */}
+                  {(() => {
+                    const currentSharpe = simulation.result?.investment_analysis?.risk_metrics?.estimated_sharpe_ratio || 0;
+                    let position = 0;
+                    
+                    // 샤프비율: -1 ~ 3 범위로 매핑 (총 4 범위)
+                    // -1 ~ 0: 0~25%, 0 ~ 1: 25~50%, 1 ~ 2: 50~75%, 2 ~ 3: 75~100%
+                    if (currentSharpe < -1) {
+                      position = 5; // 최소 5%
+                    } else if (currentSharpe >= 3) {
+                      position = 95; // 최대 95%
+                    } else if (currentSharpe < 0) {
+                      // -1 ~ 0 구간: 0~25%
+                      position = ((currentSharpe + 1) / 1) * 25;
+                    } else if (currentSharpe < 1) {
+                      // 0 ~ 1 구간: 25~50%
+                      position = 25 + (currentSharpe / 1) * 25;
+                    } else if (currentSharpe < 2) {
+                      // 1 ~ 2 구간: 50~75%
+                      position = 50 + ((currentSharpe - 1) / 1) * 25;
+                    } else {
+                      // 2 ~ 3 구간: 75~100%
+                      position = 75 + ((currentSharpe - 2) / 1) * 25;
+                    }
+                    
+                    // 5% ~ 95% 범위로 제한
+                    position = Math.max(5, Math.min(95, position));
+                    
+                    return (
+                      <div 
+                        className="absolute top-0 transform -translate-x-1/2"
+                        style={{ left: `${position}%` }}
+                      >
+                        <div className="w-0 h-0 border-l-2 border-r-2 border-b-4 border-transparent border-b-white"></div>
+                        <div className="text-white text-xs font-bold mt-1 transform -translate-x-1/2">
+                          {currentSharpe.toFixed(2)}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                
+                {/* 구간별 라벨 */}
+                <div className="grid grid-cols-4 gap-1 text-xs">
+                  <div className="text-center">
+                    <div className="text-red-400 font-medium">0 미만</div>
+                    <div className="text-gray-400">위험 가치 없음</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-yellow-400 font-medium">0 ~ 1</div>
+                    <div className="text-gray-400">불만족</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-green-400 font-medium">1 ~ 2</div>
+                    <div className="text-gray-400">양호</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-blue-400 font-medium">2 이상</div>
+                    <div className="text-gray-400">우수</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 상세 설명 */}
+              <div className="bg-slate-700 rounded-lg p-4">
+                <div className="text-sm text-white font-medium mb-2">구간별 평가</div>
+                <div className="space-y-1 text-xs text-gray-300">
+                  <div><span className="text-green-400 font-medium">1 이상:</span> 좋은 투자. 위험 대비 수익률 양호</div>
+                  <div><span className="text-blue-400 font-medium">2 이상:</span> 매우 우수한 투자</div>
+                  <div><span className="text-yellow-400 font-medium">1 미만:</span> 위험 대비 수익 불만족</div>
+                  <div><span className="text-red-400 font-medium">0 미만:</span> 위험 감수 가치 없음</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 리스크 지표 특별 처리 (VaR만) */}
+          {metricDetail.isSpecial && metricDetail.type === 'risk' && metricDetail.title === 'VaR (95%)' && (
+            <div className="space-y-4">
+              {/* 리스크 지표 시각적 표시 */}
+              <div className="bg-slate-700 rounded-lg p-4">
+                <div className="text-sm text-white font-medium mb-3">{metricDetail.title} 위험도</div>
+                
+                {/* 위험도 표시 바 */}
+                <div className="relative bg-slate-600 rounded-full h-6 mb-3">
+                  {/* 위험도 구간별 색상 */}
+                  <div className="absolute left-0 top-0 w-1/4 h-full bg-green-500 rounded-l-full"></div>
+                  <div className="absolute left-1/4 top-0 w-1/4 h-full bg-yellow-500"></div>
+                  <div className="absolute left-1/2 top-0 w-1/4 h-full bg-orange-500"></div>
+                  <div className="absolute left-3/4 top-0 w-1/4 h-full bg-red-500 rounded-r-full"></div>
+                  
+                  {/* 현재값 화살표 */}
+                  {(() => {
+                    const currentValue = Math.abs(simulation.result?.investment_analysis?.risk_metrics?.var_95 || 0) * 100;
+                    
+                    // VaR: 0~8% 범위로 매핑 (8% 이상은 100%로 처리)
+                    const maxValue = 8;
+                    let position = Math.min(currentValue / maxValue * 100, 100);
+                    
+                    // 5% ~ 95% 범위로 제한 (화살표가 끝에서 잘리지 않도록)
+                    position = Math.max(5, Math.min(95, position));
+                    
+                    return (
+                      <div 
+                        className="absolute top-0 transform -translate-x-1/2"
+                        style={{ left: `${position}%` }}
+                      >
+                        <div className="w-0 h-0 border-l-2 border-r-2 border-b-4 border-transparent border-b-white"></div>
+                        <div className="text-white text-xs font-bold mt-1 transform -translate-x-1/2">
+                          {currentValue.toFixed(1)}%
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+                
+                {/* 위험도 구간별 라벨 */}
+                <div className="grid grid-cols-4 gap-1 text-xs">
+                  <div className="text-center">
+                    <div className="text-green-400 font-medium">매우낮음</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-yellow-400 font-medium">낮음</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-orange-400 font-medium">높음</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-red-400 font-medium">매우높음</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 설명 */}
+              <div className="bg-slate-700 rounded-lg p-4">
+                <div className="text-sm text-gray-300 whitespace-pre-line">{metricDetail.content}</div>
+              </div>
+            </div>
+          )}
+          
+          {/* 일반 지표 설명 */}
+          {!metricDetail.isSpecial && !metricDetail.noContent && (
+            <div className="text-sm text-gray-200 whitespace-pre-line">{metricDetail.content}</div>
+          )}
+          
+          {/* 기본 설명 (샤프비율의 경우) */}
+          {metricDetail.isSpecial && metricDetail.title === '샤프비율' && (
+            <div className="text-sm text-gray-300 whitespace-pre-line border-t border-slate-600 pt-4">{metricDetail.content}</div>
+          )}
+        </div>
+        <div className="sticky bottom-0 bg-slate-800 border-t border-slate-700 px-6 py-4 rounded-b-2xl">
+          <button
+            onClick={() => setMetricDetail(null)}
+            className="w-full bg-slate-600 hover:bg-slate-700 text-white py-2 px-4 rounded-lg font-medium text-sm transition-colors"
+          >
+            확인
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
             </div>
 
             {/* 닫기 버튼 */}
