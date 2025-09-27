@@ -694,12 +694,26 @@ const HomePage = () => {
                           <p className="text-white font-semibold text-sm">
                             {formatCurrencyValue(stock.price)}
                           </p>
-                          <p
-                            className={`text-xs ${getDeltaClass(stock.changeAmount, stock.change)}`}
-                          >
-                            {formatCurrency(stock.changeAmount)} (
-                            {formatPercentage(stock.change)})
-                          </p>
+                          {(() => {
+                            try {
+                              const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+                              const todayKey = String(profile?.processDate || "");
+                              const bought = JSON.parse(localStorage.getItem(`boughtToday:${todayKey}`) || "[]");
+                              const isNewBuy = bought.includes(stock.ticker);
+                              if (isNewBuy) {
+                                return (
+                                  <p className={`text-xs ${getDeltaClass(0, 0)}`}>
+                                    {formatCurrency(0)} ({formatPercentage(0)})
+                                  </p>
+                                );
+                              }
+                            } catch (_) {}
+                            return (
+                              <p className={`text-xs ${getDeltaClass(stock.changeAmount, stock.change)}`}>
+                                {formatCurrency(stock.changeAmount)} ({formatPercentage(stock.change)})
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
                     </button>

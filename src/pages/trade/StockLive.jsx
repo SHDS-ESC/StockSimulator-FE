@@ -48,6 +48,17 @@ export default function StockLive() {
         { withCredentials: true }
       );
 
+      // 오늘 매수한 종목 로컬 기록 (당일 수익률 0% 표기를 위함)
+      try {
+        if (type === "BUY") {
+          const key = `boughtToday:${isoDate}`;
+          const prev = JSON.parse(localStorage.getItem(key) || "[]");
+          if (!prev.includes(s)) {
+            localStorage.setItem(key, JSON.stringify([...prev, s]));
+          }
+        }
+      } catch (_) {}
+
       if (type === "BUY") {
         setTrade("매수");
       } else {

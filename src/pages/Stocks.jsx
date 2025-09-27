@@ -7,6 +7,7 @@ import {
   Heart,
   AlertCircle,
   Clock,
+  ShoppingBag,
 } from "lucide-react";
 import useRealtimeStocks from "../hooks/useRealtimeStocks";
 import useWatchlist from "../hooks/useWatchlist";
@@ -557,26 +558,46 @@ const Stocks = () => {
 
             {/* 정렬 옵션 */}
             <div className="px-4 py-2">
-              <div className="flex gap-2">
-                {["이름", "등락률", "빠른 구매"].map((option) => (
-                  <div className={`${option === "빠른 구매" ? "ml-auto" : ""}`}>
-                    <button
-                      key={option}
-                      onClick={() => {
-                        setSelectedFilter(option);
-						option === "빠른 구매" ?
-                        setShowFavorite(false) : setShowFavorite(true)
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        selectedFilter === option
-                          ? "bg-white text-black border border-gray-300"
-                          : "bg-slate-800 text-gray-400 hover:text-white"
-                      } `}
-                    >
-                      {option}
-                    </button>
-                  </div>
+              <div className="flex gap-2 items-center">
+                {["이름", "등락률"].map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => {
+                      setSelectedFilter(option);
+                      setShowFavorite(true)
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      selectedFilter === option
+                        ? "bg-white text-black border border-gray-300"
+                        : "bg-slate-800 text-gray-400 hover:text-white"
+                    } `}
+                  >
+                    {option}
+                  </button>
                 ))}
+                <div className="ml-auto flex gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedFilter("빠른 구매");
+                      setShowFavorite(false);
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      selectedFilter === "빠른 구매"
+                        ? "bg-white text-black border border-gray-300"
+                        : "bg-slate-800 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    빠른구매
+                  </button>
+                  <button
+                    onClick={() => navigate('/batch-buy')}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-800 text-gray-200 hover:bg-slate-700 text-sm"
+                    title="일괄 구매"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>일괄구매</span>
+                  </button>
+                </div>
               </div>
             </div>
 

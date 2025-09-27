@@ -13,6 +13,7 @@ import "./index.css";
 import StockLive from "./pages/trade/StockLive";
 import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
+import BatchBuy from "./pages/BatchBuy";
 import useDateStore from "@/store/useDateStore";
 import React, { useState, useEffect, useRef } from "react";
 import useScrollLock from "@/hooks/useScrollLock";
@@ -125,14 +126,21 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
                         selected={field.value}
                         onSelect={field.onChange}
                         defaultMonth={field.value}
-                        disabled={(date) =>
-                          date > new Date() ||
-                          date < new Date("1900-01-01") || // 절대 범위
-                          date.getDay() === 0 ||
-                          date.getDay() === 6 || // 주말
-                          date < timelineFrom ||
-                          date > timelineTo
-                        }
+                        disabled={(date) => {
+                          const today = new Date();
+                          const absoluteMin = new Date("1900-01-01");
+                          const selectedMin = field.value instanceof Date ? field.value : null;
+                          const lowerBound = selectedMin || timelineFrom || absoluteMin;
+                          const upperBound = timelineTo || today;
+                          return (
+                            date > today ||
+                            date < absoluteMin ||
+                            date.getDay() === 0 ||
+                            date.getDay() === 6 ||
+                            date < lowerBound ||
+                            date > upperBound
+                          );
+                        }}
                         captionLayout="dropdown"
                       />
                     </PopoverContent>
@@ -403,6 +411,7 @@ useEffect(() => {
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/orderhistory" element={<OrderHistory />} />
             <Route path="/chat" element={<Chat />} />
+            <Route path="/batch-buy" element={<BatchBuy />} />
             <Route path="/redis-test" element={<RedisTest />} />
           </Routes>
         </div>
