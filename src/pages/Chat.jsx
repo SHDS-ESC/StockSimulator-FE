@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import LightChart from "@/components/LightChart";
 import { loadLW } from "@/lib/lightweight";
+import StockSearchModal from "@/components/StockSearchModal";
 import {
   TrendingUp,
   TrendingDown,
@@ -14,6 +15,7 @@ import {
   Plus,
   Trash2,
   Percent,
+  Download,
 } from "lucide-react";
 import useLoginStore from "@/store/useLoginStore";
 import useDateStore from "@/store/useDateStore";
@@ -138,8 +140,8 @@ const PortfolioChart = ({ portfolioData = [] }) => {
         width: chartWidth,
         height: 320,
         layout: { 
-          backgroundColor: 'transparent', 
-          textColor: '#cbd5e1' 
+          background: { color: "#0f172a" }, 
+          textColor: "#cbd5e1" 
         },
         crosshair: { mode: LW.CrosshairMode.Normal },
         timeScale: { 
@@ -152,9 +154,9 @@ const PortfolioChart = ({ portfolioData = [] }) => {
           borderColor: '#475569'
         },
         leftPriceScale: { visible: false },
-        grid: { 
-          vertLines: { color: '#334155' }, 
-          horzLines: { color: '#334155' } 
+        grid: {
+          vertLines: { color: "#233046" },
+          horzLines: { color: "#1e293b" },
         },
       });
 
@@ -486,7 +488,8 @@ const Chat = () => {
     endDate: formatDateKey(currentDate || new Date()),
     baseValue: 1.0,
     rebalance: "none",
-    portfolios: [
+    holdings: [], // 실제 보유 주식 데이터
+    portfolios: [ // 수동 포트폴리오 데이터
       {
         id: "tech_portfolio",
         name: "기술주 포트폴리오",
@@ -510,6 +513,63 @@ const Chat = () => {
   // 모달 상태 관리
   const [isChartModalOpen, setIsChartModalOpen] = useState(false);
   const [metricDetail, setMetricDetail] = useState(null);
+  
+  // 포트폴리오 탭 상태 관리
+  const [portfolioTab, setPortfolioTab] = useState('my'); // 'my' 또는 'manual'
+  
+  // 종목 검색 모달 상태 관리
+  const [isStockSearchModalOpen, setIsStockSearchModalOpen] = useState(false);
+  const [currentPortfolioIndex, setCurrentPortfolioIndex] = useState(null);
+  
+  
+  // 보유 주식 불러오기
+  const loadHoldings = async () => {
+    try {
+      setPortfolio(prev => ({ ...prev, loading: true, error: null }));
+      
+      // 현재 날짜를 YYYY-MM-DD 형식으로 변환
+      const currentDateStr = formatDateKey(currentDate || new Date());
+      
+      // 사용자 프로필 ID 가져오기 (로그인 정보에서)
+      const userProfileId = lastProfileId || 1; // 로그인된 사용자 프로필 ID 사용
+      
+      const response = await axiosInstance.get(`/holdings/stocks/${userProfileId}/${currentDateStr}`);
+      
+      if (response.data && response.data.holdingsResponseDTOS && response.data.holdingsResponseDTOS.length > 0) {
+        // HoldingsDTO를 포트폴리오 분석에 맞는 형태로 변환
+        const holdings = response.data.holdingsResponseDTOS.map(holding => ({
+          ticker: holding.ticker,
+          quantity: holding.quantity,
+          total_price: (holding.price || 0) * (holding.quantity || 0) // 현재가 * 수량
+        }));
+        
+        setPortfolio(prev => ({ 
+          ...prev, 
+          holdings: holdings,
+          loading: false 
+        }));
+      } else {
+        setPortfolio(prev => ({ 
+          ...prev, 
+          holdings: [],
+          loading: false,
+          error: '보유 주식이 없습니다. 먼저 주식을 매수해주세요.'
+        }));
+      }
+    } catch (error) {
+      console.error('보유 주식 불러오기 실패:', error);
+      setPortfolio(prev => ({ 
+        ...prev, 
+        loading: false,
+        error: '보유 주식을 불러오는데 실패했습니다.'
+      }));
+    }
+  };
+
+  // 컴포넌트 마운트 시 보유 주식 불러오기
+  useEffect(() => {
+    loadHoldings();
+  }, []);
   const METRIC_DETAILS = {
     currentPrice: {
       title: "현재가격",
@@ -630,7 +690,175 @@ const Chat = () => {
   }, [currentDate]);
 
   // 포트폴리오 API 호출 함수
+  // 포트폴리오 분석 실행 (실제 보유 주식 기반)
   const handlePortfolioSubmit = async () => {
+    if (portfolio.loading || portfolio.holdings.length === 0) return;
+    
+    setPortfolio(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      // 보유 주식 데이터를 백엔드 형식으로 변환
+      const totalValue = portfolio.holdings.reduce((sum, holding) => sum + (holding.total_price || 0), 0);
+      
+      const requestData = {
+        startDate: portfolio.startDate,
+        endDate: portfolio.endDate,
+        baseValue: portfolio.baseValue,
+        rebalance: portfolio.rebalance,
+        portfolios: [{
+          id: "my_portfolio",
+          name: "내 포트폴리오",
+          tickers: portfolio.holdings.map(h => h.ticker),
+          weights: portfolio.holdings.map(h => (h.total_price || 0) / totalValue)
+        }]
+      };
+
+      const response = await axiosInstance.post('/agent/portfolio/cumulative-returns', requestData);
+      
+      setPortfolio(prev => ({
+        ...prev, 
+        loading: false, 
+        result: response.data,
+        error: null
+      }));
+    } catch (error) {
+      console.error('포트폴리오 API 오류:', error);
+      setPortfolio(prev => ({
+        ...prev, 
+        loading: false, 
+        error: '포트폴리오 분석 중 오류가 발생했습니다.' 
+      }));
+    }
+  };
+
+  // 보유 주식 새로고침
+  const refreshHoldings = () => {
+    loadHoldings();
+  };
+
+  // 수동 포트폴리오 관련 함수들
+  const handlePortfolioItemChange = (index, field, value) => {
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: prev.portfolios.map((p, i) => 
+        i === index ? { ...p, [field]: value } : p
+      )
+    }));
+  };
+
+
+  const handleWeightChange = (portfolioIndex, tickerIndex, weight) => {
+    const numWeight = parseFloat(weight) || 0;
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: prev.portfolios.map((p, i) => {
+        if (i === portfolioIndex) {
+          const newWeights = [...p.weights];
+          newWeights[tickerIndex] = numWeight;
+          return { ...p, weights: newWeights };
+        }
+        return p;
+      })
+    }));
+  };
+
+  const addTicker = (portfolioIndex) => {
+    setCurrentPortfolioIndex(portfolioIndex);
+    setIsStockSearchModalOpen(true);
+  };
+
+  // 종목 선택 핸들러 (모달에서 종목 선택 시)
+  const handleStockSelect = (stock) => {
+    if (currentPortfolioIndex === null) return;
+    
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: prev.portfolios.map((p, i) => {
+        if (i === currentPortfolioIndex) {
+          // 중복 체크
+          if (p.tickers.includes(stock.ticker)) {
+            return p;
+          }
+          return {
+            ...p,
+            tickers: [...p.tickers, stock.ticker],
+            weights: [...p.weights, 1]
+          };
+        }
+        return p;
+      })
+    }));
+  };
+
+  const removeTicker = (portfolioIndex, tickerIndex) => {
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: prev.portfolios.map((p, i) => {
+        if (i === portfolioIndex && p.tickers.length > 1) {
+          return {
+            ...p,
+            tickers: p.tickers.filter((_, j) => j !== tickerIndex),
+            weights: p.weights.filter((_, j) => j !== tickerIndex)
+          };
+        }
+        return p;
+      })
+    }));
+  };
+
+  const normalizePortfolioWeights = (portfolioIndex) => {
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: prev.portfolios.map((p, i) => {
+        if (i === portfolioIndex) {
+          const sum = p.weights.reduce((acc, w) => acc + w, 0);
+          if (sum > 0) {
+            return {
+              ...p,
+              weights: p.weights.map(w => parseFloat((w / sum).toFixed(3)))
+            };
+          }
+        }
+        return p;
+      })
+    }));
+  };
+
+  const getPortfolioWeightSum = (portfolioIndex) => {
+    const p = portfolio.portfolios[portfolioIndex];
+    return p ? p.weights.reduce((sum, w) => sum + w, 0) : 0;
+  };
+
+  const getWeightPercentage = (portfolioIndex, weight) => {
+    const sum = getPortfolioWeightSum(portfolioIndex);
+    return sum > 0 ? ((weight / sum) * 100).toFixed(1) : '0.0';
+  };
+
+  const addPortfolio = () => {
+    const newPortfolio = {
+      id: `portfolio_${Date.now()}`,
+      name: `포트폴리오 ${portfolio.portfolios.length + 1}`,
+      tickers: [],
+      weights: []
+    };
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: [...prev.portfolios, newPortfolio]
+    }));
+  };
+
+  const removePortfolio = (index) => {
+    if (portfolio.portfolios.length <= 1) {
+      return; // 최소 1개는 유지
+    }
+    setPortfolio(prev => ({
+      ...prev,
+      portfolios: prev.portfolios.filter((_, i) => i !== index)
+    }));
+  };
+
+  // 수동 포트폴리오 분석 실행
+  const handleManualPortfolioSubmit = async () => {
     // 유효성 검사
     const validationErrors = [];
     
@@ -668,6 +896,7 @@ const Chat = () => {
           const normalizedWeights = sum > 0 ? p.weights.map(w => w / sum) : p.weights;
           return {
             id: p.id,
+            name: p.name,
             tickers: p.tickers.filter(t => t.trim() !== ''), // 빈 종목 제거
             weights: normalizedWeights
           };
@@ -675,7 +904,6 @@ const Chat = () => {
       };
 
       const response = await axiosInstance.post('/agent/portfolio/cumulative-returns', requestData);
-      
       
       setPortfolio(prev => ({
         ...prev, 
@@ -691,137 +919,6 @@ const Chat = () => {
         error: '포트폴리오 분석 중 오류가 발생했습니다.' 
       }));
     }
-  };
-
-  // 포트폴리오 항목 변경 핸들러
-  const handlePortfolioItemChange = (index, field, value) => {
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.map((p, i) => 
-        i === index ? { ...p, [field]: value } : p
-      )
-    }));
-  };
-
-  // 개별 종목 변경 핸들러
-  const handleTickerChange = (portfolioIndex, tickerIndex, ticker) => {
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.map((p, i) => {
-        if (i === portfolioIndex) {
-          const newTickers = [...p.tickers];
-          newTickers[tickerIndex] = ticker.toUpperCase();
-          return { ...p, tickers: newTickers };
-        }
-        return p;
-      })
-    }));
-  };
-
-  // 개별 비중 변경 핸들러 (숫자 입력 후 자동 비율 계산)
-  const handleWeightChange = (portfolioIndex, tickerIndex, weight) => {
-    const numWeight = parseFloat(weight) || 0;
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.map((p, i) => {
-        if (i === portfolioIndex) {
-          const newWeights = [...p.weights];
-          newWeights[tickerIndex] = numWeight;
-          return { ...p, weights: newWeights };
-        }
-        return p;
-      })
-    }));
-  };
-
-  // 종목 추가
-  const addTicker = (portfolioIndex) => {
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.map((p, i) => {
-        if (i === portfolioIndex) {
-          return {
-            ...p,
-            tickers: [...p.tickers, ''],
-            weights: [...p.weights, 1]
-          };
-        }
-        return p;
-      })
-    }));
-  };
-
-  // 종목 삭제
-  const removeTicker = (portfolioIndex, tickerIndex) => {
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.map((p, i) => {
-        if (i === portfolioIndex && p.tickers.length > 1) {
-          return {
-            ...p,
-            tickers: p.tickers.filter((_, j) => j !== tickerIndex),
-            weights: p.weights.filter((_, j) => j !== tickerIndex)
-          };
-        }
-        return p;
-      })
-    }));
-  };
-
-  // 비중을 비율로 정규화
-  const normalizePortfolioWeights = (portfolioIndex) => {
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.map((p, i) => {
-        if (i === portfolioIndex) {
-          const sum = p.weights.reduce((acc, w) => acc + w, 0);
-          if (sum > 0) {
-            return {
-              ...p,
-              weights: p.weights.map(w => parseFloat((w / sum).toFixed(3)))
-            };
-          }
-        }
-        return p;
-      })
-    }));
-  };
-
-  // 비중 합계 계산 (개별 포트폴리오용)
-  const getPortfolioWeightSum = (portfolioIndex) => {
-    const p = portfolio.portfolios[portfolioIndex];
-    return p ? p.weights.reduce((sum, w) => sum + w, 0) : 0;
-  };
-
-  // 비중 비율 계산 (표시용)
-  const getWeightPercentage = (portfolioIndex, weight) => {
-    const sum = getPortfolioWeightSum(portfolioIndex);
-    return sum > 0 ? ((weight / sum) * 100).toFixed(1) : '0.0';
-  };
-
-  // 포트폴리오 추가
-  const addPortfolio = () => {
-    const newPortfolio = {
-      id: `portfolio_${Date.now()}`,
-      name: `포트폴리오 ${portfolio.portfolios.length + 1}`,
-      tickers: [''],
-      weights: [1]
-    };
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: [...prev.portfolios, newPortfolio]
-    }));
-  };
-
-  // 포트폴리오 삭제
-  const removePortfolio = (index) => {
-    if (portfolio.portfolios.length <= 1) {
-      return; // 최소 1개는 유지
-    }
-    setPortfolio(prev => ({
-      ...prev,
-      portfolios: prev.portfolios.filter((_, i) => i !== index)
-    }));
   };
 
   return (
@@ -1355,9 +1452,36 @@ const Chat = () => {
             {/* 포트폴리오 탭 */}
             {activeTab === "portfolio" && (
               <div className="space-y-4">
-                {/* 포트폴리오 설정 */}
+                {/* 포트폴리오 탭 선택 */}
                 <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
-                  <h3 className="text-lg font-semibold text-white mb-4">포트폴리오 누적수익률 분석</h3>
+                  <div className="flex space-x-1 mb-4">
+                    <button
+                      onClick={() => setPortfolioTab('my')}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        portfolioTab === 'my'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                      }`}
+                    >
+                      내 포트폴리오
+                    </button>
+                    <button
+                      onClick={() => setPortfolioTab('manual')}
+                      className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                        portfolioTab === 'manual'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                      }`}
+                    >
+                      커스텀 포트폴리오
+                    </button>
+                  </div>
+                </div>
+
+                {/* 내 포트폴리오 탭 */}
+                {portfolioTab === 'my' && (
+                  <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
+                    <h3 className="text-lg font-semibold text-white mb-4">내 포트폴리오 분석</h3>
                   
                   {/* 기본 설정 */}
                   <div className="grid grid-cols-2 gap-3 mb-4">
@@ -1408,7 +1532,141 @@ const Chat = () => {
                     </div>
                   </div>
 
-                  {/* 포트폴리오 목록 */}
+                  {/* 보유 주식 목록 */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-sm font-medium text-white">보유 주식</label>
+                      <button
+                        onClick={refreshHoldings}
+                        className="flex items-center space-x-1 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-lg text-xs text-white transition-colors"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>새로고침</span>
+                      </button>
+                    </div>
+                    
+                    {portfolio.loading ? (
+                      <div className="flex items-center justify-center h-24">
+                        <div className="text-gray-400 text-sm">보유 주식을 불러오는 중...</div>
+                      </div>
+                    ) : portfolio.holdings.length === 0 ? (
+                      <div className="flex items-center justify-center h-24">
+                        <div className="text-gray-400 text-sm text-center">
+                          <p>보유 주식이 없습니다.</p>
+                          <p className="text-xs mt-1">먼저 주식을 매수해주세요.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {portfolio.holdings.map((holding, index) => {
+                          const totalValue = portfolio.holdings.reduce((sum, h) => sum + (h.total_price || 0), 0);
+                          const percentage = totalValue > 0 ? ((holding.total_price || 0) / totalValue * 100).toFixed(1) : '0.0';
+                          
+                          return (
+                            <div key={index} className="bg-slate-600 rounded-lg p-3 border border-slate-500">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="font-semibold text-white text-sm">
+                                      {holding.ticker}
+                                    </span>
+                                    <span className="text-xs text-gray-300">
+                                      {holding.quantity}주
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-300 mt-1">
+                                    총 가격: ${(holding.total_price || 0).toLocaleString()}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium text-white">
+                                    {percentage}%
+                                  </div>
+                                  <div className="text-xs text-gray-400">
+                                    비중
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 실행 버튼 */}
+                  <button
+                    onClick={handlePortfolioSubmit}
+                    disabled={portfolio.loading || portfolio.holdings.length === 0}
+                    className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-medium text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {portfolio.loading ? "분석 중..." : "포트폴리오 분석 실행"}
+                  </button>
+
+                  {/* 에러 표시 */}
+                  {portfolio.error && (
+                    <div className="mt-3 p-3 bg-red-900 border border-red-600 rounded-lg">
+                      <div className="text-xs text-red-300 whitespace-pre-line">{portfolio.error}</div>
+                    </div>
+                  )}
+                  </div>
+                )}
+
+                {/* 커스텀 포트폴리오 탭 */}
+                {portfolioTab === 'manual' && (
+                  <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
+                    <h3 className="text-lg font-semibold text-white mb-4">커스텀 포트폴리오 분석</h3>
+                    
+                    {/* 기본 설정 */}
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">시작 날짜</label>
+                        <input
+                          type="date"
+                          value={portfolio.startDate}
+                          onChange={(e) => setPortfolio(prev => ({ ...prev, startDate: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">종료 날짜</label>
+                        <input
+                          type="date"
+                          value={portfolio.endDate}
+                          onChange={(e) => setPortfolio(prev => ({ ...prev, endDate: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">초기 투자금</label>
+                        <input
+                          type="number"
+                          value={portfolio.baseValue}
+                          onChange={(e) => setPortfolio(prev => ({ ...prev, baseValue: parseFloat(e.target.value) || 1.0 }))}
+                          step="0.1"
+                          min="0.1"
+                          className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white focus:border-purple-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">리밸런싱</label>
+                        <select
+                          value={portfolio.rebalance}
+                          onChange={(e) => setPortfolio(prev => ({ ...prev, rebalance: e.target.value }))}
+                          className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white focus:border-purple-500 focus:outline-none"
+                        >
+                          <option value="none">없음</option>
+                          <option value="monthly">월간</option>
+                          <option value="quarterly">분기</option>
+                          <option value="yearly">연간</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* 포트폴리오 구성 */}
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-sm font-medium text-white">포트폴리오 구성</label>
@@ -1417,15 +1675,16 @@ const Chat = () => {
                         className="flex items-center space-x-1 px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded-lg text-xs text-white transition-colors"
                       >
                         <Plus className="w-3 h-3" />
-                        <span>추가</span>
+                          <span>포트폴리오 추가</span>
                       </button>
                     </div>
+                      
                     <div className="space-y-3">
                       {portfolio.portfolios && portfolio.portfolios.map((p, index) => {
                         if (!p || !p.tickers || !p.weights) return null;
                         
                         return (
-                          <div key={p.id} className="bg-slate-700 rounded-lg p-3 border border-slate-600">
+                            <div key={p.id} className="bg-slate-600 rounded-lg p-3 border border-slate-500">
                             {/* 포트폴리오 헤더 */}
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex-1">
@@ -1433,7 +1692,7 @@ const Chat = () => {
                                   type="text"
                                   value={p.name || ''}
                                   onChange={(e) => handlePortfolioItemChange(index, 'name', e.target.value)}
-                                  className="bg-transparent text-sm font-medium text-white border-none outline-none focus:bg-slate-600 focus:px-2 focus:py-1 focus:rounded transition-all"
+                                    className="bg-transparent text-sm font-medium text-white border-none outline-none focus:bg-slate-500 focus:px-2 focus:py-1 focus:rounded transition-all"
                                   placeholder="포트폴리오 이름"
                                 />
                               </div>
@@ -1464,23 +1723,18 @@ const Chat = () => {
                               </div>
                               
                               <div className="space-y-2">
-                                {p.tickers && p.tickers.map((ticker, tickerIndex) => (
+                                  {p.tickers && p.tickers.length > 0 ? (
+                                    p.tickers.map((ticker, tickerIndex) => (
                                   <div key={tickerIndex} className="flex items-center space-x-2">
-                                    {/* 종목 입력 */}
+                                        {/* 종목 표시 (읽기 전용) */}
                                     <div className="flex-1">
-                                      <input
-                                        type="text"
-                                        value={ticker}
-                                        onChange={(e) => handleTickerChange(index, tickerIndex, e.target.value)}
-                                        placeholder="종목코드"
-                                        className="w-full px-2 py-1 text-xs bg-slate-600 border border-slate-500 rounded text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none"
-                                        autoComplete="off"
-                                        spellCheck="false"
-                                      />
+                                          <div className="w-full px-3 py-2 text-sm bg-slate-500 border border-slate-400 rounded text-white font-medium">
+                                            {ticker}
+                                          </div>
                                     </div>
                                     
                                     {/* 비중 입력 */}
-                                    <div className="w-16">
+                                        <div className="w-20">
                                       <input
                                         type="number"
                                         value={p.weights && p.weights[tickerIndex] ? p.weights[tickerIndex] : 1}
@@ -1488,12 +1742,12 @@ const Chat = () => {
                                         placeholder="1"
                                         min="0"
                                         step="0.1"
-                                        className="w-full px-2 py-1 text-xs bg-slate-600 border border-slate-500 rounded text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none text-center"
+                                            className="w-full px-2 py-2 text-sm bg-slate-500 border border-slate-400 rounded text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none text-center"
                                       />
                                     </div>
                                     
                                     {/* 비율 표시 */}
-                                    <div className="w-12 text-xs text-gray-300 text-center">
+                                        <div className="w-16 text-sm text-gray-300 text-center font-medium">
                                       {getWeightPercentage(index, p.weights && p.weights[tickerIndex] ? p.weights[tickerIndex] : 1)}%
                                     </div>
                                     
@@ -1501,18 +1755,26 @@ const Chat = () => {
                                     {p.tickers.length > 1 && (
                                       <button
                                         onClick={() => removeTicker(index, tickerIndex)}
-                                        className="p-1 bg-red-600 hover:bg-red-700 rounded text-white transition-colors"
+                                            className="p-2 bg-red-600 hover:bg-red-700 rounded text-white transition-colors"
                                         title="종목 삭제"
                                       >
-                                        <Trash2 className="w-3 h-3" />
+                                            <Trash2 className="w-4 h-4" />
                                       </button>
                                     )}
                                   </div>
-                                ))}
+                                    ))
+                                  ) : (
+                                    <div className="flex items-center justify-center py-8 text-gray-400">
+                                      <div className="text-center">
+                                        <div className="text-sm mb-2">종목이 없습니다</div>
+                                        <div className="text-xs">"종목 추가" 버튼을 눌러 종목을 검색해보세요</div>
+                                      </div>
+                                    </div>
+                                  )}
                               </div>
                               
                               {/* 비중 정규화 버튼 */}
-                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-600">
+                                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-500">
                                 <div className="text-xs text-gray-400">
                                   합계: {getPortfolioWeightSum(index).toFixed(1)} 
                                   <span className="text-gray-500 ml-1">
@@ -1536,7 +1798,7 @@ const Chat = () => {
 
                   {/* 실행 버튼 */}
                   <button
-                    onClick={handlePortfolioSubmit}
+                      onClick={handleManualPortfolioSubmit}
                     disabled={portfolio.loading}
                     className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg font-medium text-sm hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
@@ -1550,6 +1812,7 @@ const Chat = () => {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* 포트폴리오 결과 */}
                 {portfolio.result && (
@@ -2401,6 +2664,18 @@ const Chat = () => {
           </div>
         </div>
       )}
+
+      {/* 종목 검색 모달 */}
+      <StockSearchModal
+        isOpen={isStockSearchModalOpen}
+        onClose={() => setIsStockSearchModalOpen(false)}
+        onSelectStock={handleStockSelect}
+        currentTickers={
+          currentPortfolioIndex !== null && portfolio.portfolios[currentPortfolioIndex]
+            ? portfolio.portfolios[currentPortfolioIndex].tickers || []
+            : []
+        }
+      />
     </div>
   );
 };
