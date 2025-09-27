@@ -15,6 +15,7 @@ import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
 import useDateStore from "@/store/useDateStore";
 import React, { useState, useEffect, useRef } from "react";
+import useScrollLock from "@/hooks/useScrollLock";
 import axiosInstance from "./util/axiosInstance";
 // CalendarForm 관련 imports
 import { format, subDays } from "date-fns";
@@ -157,12 +158,14 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
 }
 
 function App() {
-  const { isTurnOver, currentDate, skipNotice, goNextTurn } = useDateStore();
+  const { isTurnOver, currentDate, skipNotice, goNextTurn, isEnding } = useDateStore();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const { lastProfileId } = useLoginStore();
   const chartRef = useRef(null);
   const toggleCalendar = () => setIsCalendarOpen((prev) => !prev);
   const { portfolioList, setPortfolioList, initChart } = useChartStore();
+  // 모달 열릴 때 배경 스크롤 잠금 (캘린더/턴오버/엔딩)
+  useScrollLock(isCalendarOpen || isTurnOver || isEnding);
   // Header에서 호출할 콜백 함수
   const handleTurnOverData = (changeList) => {
     console.log("App에서 받은 턴 종료 데이터:", changeList);
@@ -235,10 +238,10 @@ function App() {
 
   const parseNumericValue = (val) => {
     if (val === null || val === undefined || val === "") return 0;
-    const n = parseFloat(
-      String(val).replace("%", "").replace(/\+/g, "").trim()
-    );
-    return Number.isFinite(n) ? n : 0;
+    const cleaned = String(val).replace(/[^0-9.-]/g, "");
+    const n = parseFloat(cleaned);
+    if (!Number.isFinite(n)) return 0;
+    return Math.abs(n) < 1e-9 ? 0 : n;
   };
 
   const handleDateChange = async (selectedDate) => {
@@ -278,7 +281,7 @@ function App() {
   const [todayOfferData, setTodayOfferData] = useState([]);
 
   const [todayProfile, setTodayProfile] = useState([]);
-
+  const [endingHoldings, setEndingHoldings] = useState([]);
   const formatDate = (currentDate) => {
     let date = new Date(currentDate);
 
@@ -324,15 +327,13 @@ function App() {
     );
   }
 
-  // 차트 초기화
+  // 차트 초기화: 턴종료/엔딩 팝업 모두에서 동작
   useEffect(() => {
-    // chartRef가 준비되고 TurnOver 상태일 때만 차트 초기화
-    if (isTurnOver && chartRef.current) {
-      const cleanup = initChart(chartRef); // chartRef를 매개변수로 전달
-
+    if ((isTurnOver || isEnding) && chartRef.current) {
+      const cleanup = initChart(chartRef);
       return cleanup;
     }
-  }, [initChart, isTurnOver, chartRef, todayOfferData]);
+  }, [initChart, isTurnOver, isEnding, chartRef, todayOfferData]);
 
   // portfolioList가 변경될 때 차트 업데이트를 위한 별도 useEffect
 useEffect(() => {
@@ -348,6 +349,32 @@ useEffect(() => {
     console.log("Portfolio data updated:", portfolioList);
   }
 }, [portfolioList]);
+
+  // 엔딩 모달이 열릴 때 보유 주식 리스트 로드
+  useEffect(() => {
+    const loadEndingHoldings = async () => {
+      try {
+        if (!isEnding) return;
+        const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+        const id = profile?.id || lastProfileId;
+        const offerDate = formatDate(currentDate);
+        if (!id || !offerDate) {
+          setEndingHoldings([]);
+          return;
+        }
+        const resp = await axiosInstance.get(
+          `holdings/stocks/${id}/${offerDate}`,
+          { withCredentials: true }
+        );
+        const list = resp?.data?.holdingsResponseDTOS || [];
+        setEndingHoldings(Array.isArray(list) ? list : []);
+      } catch (e) {
+        console.error("Ending holdings fetch failed", e);
+        setEndingHoldings([]);
+      }
+    };
+    loadEndingHoldings();
+  }, [isEnding, currentDate, lastProfileId]);
 
   return (
     <div className="min-h-screen flex flex-col items-center relative">
@@ -382,12 +409,20 @@ useEffect(() => {
 
         {/* TurnOver 팝업 */}
         {isTurnOver && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-            <div className="bg-slate-800 rounded-2xl p-8 w-[20%] max-w-lg  max-h-full overflow-hidden">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            <div
+              className="bg-slate-800 rounded-2xl ps-8 pe-8 pt-4 inline-block w-auto max-w-[90vw] sm:max-w-[640px] overflow-auto scrollbar-hide"
+              onWheel={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
               <div className="flex justify-end">
                 <button
-                  onClick={() => useDateStore.setState({ isTurnOver: false })}
-                  className="px-4 rounded-lg text-white"
+                  onClick={() => useDateStore.setState({ isTurnOver: false })}  
+                  className="px-4 rounded-lg text-white mb-5"
                 >
                   X
                 </button>
@@ -406,6 +441,146 @@ useEffect(() => {
                     maxWidth: "400px", // 이 값으로 차트 크기 조절 가능
                   }}
                 />
+                <div className="mt-4 bg-slate-900 p-4 rounded-xl text-white shadow-md w-full">
+                  {/* 총자산/투자손익/보유 현금 */}
+                  <div className="flex flex-col gap-4 mb-6">
+                    {/* 총 자산 */}
+                    <div className="flex justify-between">
+                      <span className="font-semibold">총 자산</span>
+                      <div className="flex flex-col text-end">
+                        <div className="font-bold">
+                          {formatCurrencyValue(todayProfile.totalAssets)}
+                        </div>
+                        <div
+                          className={getColorClass(
+                            parseNumericValue(todayProfile.changeRate)
+                          )}
+                        >
+                          ({formatPercentage(todayProfile.changeRate)})
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 투자 손익 */}
+                    <div className="flex justify-between">
+                      <span className="font-semibold">투자금</span>
+                      <div className="flex flex-col text-end">
+                        <span
+                          className={`font-bold `}
+                        >
+                         $ {todayProfile.totalInvested}
+                        </span>
+                        <div
+                          className={getColorClass(
+                            parseNumericValue(todayProfile.changeRate)
+                          )}
+                        >
+                          ({formatPercentage(todayProfile.changeRate)})
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 보유 현금 */}
+                    <div className="flex justify-between">
+                      <span className="font-semibold">보유 현금</span>
+                      <div className="flex flex-col text-end">
+                        <span className="font-bold">
+                          {formatCurrencyValue(todayProfile?.cashBalance || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 구매/판매 내역 리스트 (스크롤 가능) */}
+                  <div className="max-h-40 overflow-y-auto scrollbar-hide space-y-2">
+                    {todayOfferData.map((todayOffer, index) => (
+                      <div
+                        key={index}
+                        className="flex justify-between py-2 border-b border-gray-700"
+                      >
+                        {/* 왼쪽: 로고 + 종목명 */}
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center overflow-hidden">
+                            <img
+                              src={todayOffer.logo} // <- 로고 url 사용
+                              alt={todayOffer.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium text-sm">
+                              {todayOffer.name}
+                            </h4>
+                            <p className="text-gray-400 text-xs">
+                              {todayOffer.ticker}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 오른쪽: 수량/금액/등락률 */}
+                        <div className="text-right">
+                          <p className="text-white font-semibold text-[10px] mb-2">
+                            {todayOffer.quantity}주
+                          </p>
+                          <p className="text-white font-semibold text-sm">
+                            {formatCurrencyValue(todayOffer.changeAmount)}
+                          </p>
+                          <p
+                            className={`text-xs ${getColorClass(
+                              parseNumericValue(todayOffer.changeAmount)
+                            )}`}
+                          >
+                            {formatCurrency(todayOffer.changeAmount)} (
+                            {formatPercentage(todayOffer.changeRate)})
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+         {/* Ending 팝업 */}
+        {isEnding && (
+          
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            
+            <div
+              className="bg-slate-800 rounded-2xl ps-8 pe-8 pt-4 inline-block w-auto max-w-[90vw] sm:max-w-[640px] overflow-auto scrollbar-hide"
+              onWheel={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-end">
+                <button
+                  onClick={() => useDateStore.setState({ isEnding: false }, 
+                  )}  
+                  className="pt-4 rounded-lg text-white mb-5"
+                >
+                  X
+                </button>
+              </div>
+              <h2 className="text-2xl font-bold mb-4 text-white text-center">
+              {JSON.parse(localStorage.getItem("newProfile") || "{}").name} 모의 투자 종료
+              </h2>
+              {/*차트*/}
+              <div className="mb-10">
+                <div
+                  ref={chartRef}
+                  className="bg-slate-800 rounded-xl overflow-hidden mx-auto"
+                  style={{
+                    height: "280px",
+                    width: "100%",
+                    maxWidth: "400px", // 이 값으로 차트 크기 조절 가능
+                  }}
+                />
+                
                 <div className="mt-4 bg-slate-900 p-4 rounded-xl text-white shadow-md w-full">
                   {/* 총자산/투자손익/보유 현금 */}
                   <div className="flex flex-col gap-4 mb-6">
@@ -507,6 +682,8 @@ useEffect(() => {
             </div>
           </div>
         )}
+
+
         {/* 휴장일 스킵 토스트 */}
         {skipNotice && (
           <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50">

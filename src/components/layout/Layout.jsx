@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Home,
@@ -29,6 +29,8 @@ export const Header = ({ onClick, onTurnOverData }) => {
     setCurrentDate,
     showSkipNotice,
     clearSkipNotice,
+    setIsEnding,
+    isEnding,
   } = useDateStore();
 
   const { lastProfileId } = useLoginStore();
@@ -37,6 +39,22 @@ export const Header = ({ onClick, onTurnOverData }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [list, setList] = useState();
+  const [isProcessingTurn, setIsProcessingTurn] = useState(false);
+  const [turnProgress, setTurnProgress] = useState(0);
+  const progressTimerRef = useRef(null);
+  // 투자 종료 여부(프로필 종료일 기준) - 모달 닫혀도 비활성 유지
+  const isInvestmentEnded = useMemo(() => {
+    try {
+      const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+      const toRaw = profile?.timelineTo;
+      if (!toRaw) return false;
+      const toStr = format(new Date(toRaw), "yyyy-MM-dd");
+      const curStr = String(currentDate || "");
+      return curStr > toStr;
+    } catch (_) {
+      return false;
+    }
+  }, [currentDate]);
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
@@ -52,7 +70,53 @@ export const Header = ({ onClick, onTurnOverData }) => {
     return realTimeDate === today;
   };
 
+  // 휴장일 스냅은 컴포넌트 레벨에서 수행 (버튼 핸들러 내 Hook 호출 제거)
+  useEffect(() => {
+    let active = true;
+    const snap = async () => {
+      if (!lastProfileId) return;
+      try {
+        const r = await axiosInstance.get(`/db/next-trading-day`, {
+          params: { date: currentDate, max: 30 },
+        });
+        const eff = String(r?.data?.effectiveDate || "") || null;
+        const result = eff
+          ? {
+              effectiveDate: eff,
+              skipped: Number(r?.data?.skippedDays || 0),
+              reachedLimit: false,
+            }
+          : { effectiveDate: currentDate, skipped: 0, reachedLimit: false };
+        if (!active) return;
+        if (
+          !result.reachedLimit &&
+          result.effectiveDate &&
+          result.effectiveDate !== currentDate
+        ) {
+          setCurrentDate(result.effectiveDate);
+        }
+      } catch (_) {
+        // ignore
+      }
+    };
+    snap();
+    return () => {
+      active = false;
+    };
+  }, [lastProfileId]);
+
   const handleNextButtonClick = async () => {
+    if (isInvestmentEnded) {
+      return;
+    }
+    // 진행바 시작
+    setIsProcessingTurn(true);
+    setTurnProgress(0);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    progressTimerRef.current = setInterval(() => {
+      setTurnProgress((p) => (p < 90 ? p + 7 : 90));
+    }, 150);
+
     const currentDateObj = new Date(currentDate);
     currentDateObj.setDate(currentDateObj.getDate() + 1);
     const nextKey = currentDateObj.toISOString().split("T")[0];
@@ -115,6 +179,24 @@ export const Header = ({ onClick, onTurnOverData }) => {
     setPortfolioList(responseData);
     goNextTurn(effectiveDateObj);
 
+    // 엔딩 조건: 프로필의 timelineTo(종료일) 도달 또는 초과 시 엔딩 팝업 표시
+    try {
+      const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+      const timelineToRaw = profile?.timelineTo;
+      const toStr = timelineToRaw
+        ? format(new Date(timelineToRaw), "yyyy-MM-dd")
+        : "";
+      const effStr = format(effectiveDateObj, "yyyy-MM-dd");
+      // 엔딩은 종료일을 지나친 시점(>)에만 표시: 종료일 당일은 플레이 가능
+      if (toStr && effStr > toStr) {
+        // TurnOver 팝업 대신 엔딩 팝업
+        useDateStore.setState({ isTurnOver: false });
+        setIsEnding();
+      }
+    } catch (_) {
+      // ignore parse errors
+    }
+
     function getRandomColor() {
       return (
         "#" +
@@ -123,46 +205,26 @@ export const Header = ({ onClick, onTurnOverData }) => {
           .padStart(6, "0")
       );
     }
-
-    // 마운트 시 현재 날짜가 휴장일이면 유효 거래일로 스냅
-    useEffect(() => {
-      let active = true;
-      const snap = async () => {
-        if (!lastProfileId) return;
-        try {
-          // 서버 메타 호출만 사용
-          const r = await axiosInstance.get(`/db/next-trading-day`, {
-            params: { date: currentDate, max: 30 },
-          });
-          const eff = String(r?.data?.effectiveDate || "") || null;
-          const result = eff
-            ? {
-                effectiveDate: eff,
-                skipped: Number(r?.data?.skippedDays || 0),
-                reachedLimit: false,
-              }
-            : { effectiveDate: currentDate, skipped: 0, reachedLimit: false };
-          if (!active) return;
-          if (
-            !result.reachedLimit &&
-            result.effectiveDate &&
-            result.effectiveDate !== currentDate
-          ) {
-            setCurrentDate(result.effectiveDate);
-          }
-        } catch (_) {
-          // ignore
-        }
-      };
-      snap();
-      return () => {
-        active = false;
-      };
-    }, [lastProfileId]);
+    // (이전 위치의 잘못된 Hook 호출 제거)
+    // 진행바 종료
+    try {
+      setTurnProgress(100);
+    } finally {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+      setTimeout(() => setIsProcessingTurn(false), 300);
+    }
   };
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    };
+  }, []);
   return (
     <div className="fixed top-0 left-1/2 transform -translate-x-1/2 w-full max-w-md z-50">
-      <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center">
+      <div className="bg-slate-900 px-4 py-3 grid grid-cols-3 items-center relative">
         {/* 왼쪽 */}
         <div className="flex justify-start">
           <button
@@ -184,7 +246,7 @@ export const Header = ({ onClick, onTurnOverData }) => {
         </div>
 
         {/* 가운데 - 자동으로 완전 중앙 */}
-        <h1
+        <div
           className="text-white text-lg text-center"
           style={{
             fontFamily: '"IBM Plex Sans KR", sans-serif',
@@ -198,32 +260,42 @@ export const Header = ({ onClick, onTurnOverData }) => {
           ) : (
             <h1>{currentDate}</h1>
           )}
-        </h1>
+        </div>
 
         {/* 오른쪽 */}
         <div className="flex justify-end">
           {location.pathname === "/" ||
           location.pathname === "/register" ||
-          lastProfileId === null ? null : validateRealTimeDate(currentDate) ? (
-            <Button
-              onClick={handleNextButtonClick}
-              className="m-0"
-              variant="block"
-              disabled
-            >
+          lastProfileId === null ? null : isEnding ? (
+            <Button className="m-0 bg-slate-700 text-gray-300 hover:bg-slate-700 cursor-not-allowed" variant="block" disabled>
+              투자 종료됨
+            </Button>
+          ) : validateRealTimeDate(currentDate) ? (
+            <Button className="m-0" variant="block" disabled>
               실시간
             </Button>
           ) : (
             <Button
               onClick={handleNextButtonClick}
-              className="m-0"
-              variant="confirm"
+              className={`m-0 ${isInvestmentEnded ? "bg-slate-700 text-gray-300 hover:bg-slate-700 cursor-not-allowed" : ""}`}
+              variant={isInvestmentEnded ? "block" : "confirm"}
+              disabled={isProcessingTurn || isInvestmentEnded}
             >
-              턴 종료
+              {isInvestmentEnded ? "투자 종료됨" : (isProcessingTurn ? "처리중..." : "턴 종료")}
             </Button>
           )}
         </div>
       </div>
+      {isProcessingTurn && (
+        <div className="px-4">
+          <div className="h-1 bg-slate-700/40 rounded overflow-hidden">
+            <div
+              className="h-full bg-red-500 transition-all"
+              style={{ width: `${turnProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* 드롭다운 메뉴 */}
       {isMenuOpen && (
