@@ -59,8 +59,18 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
       selectedDate: selectedDate || new Date(),
     },
   });
+  const [isPickerOpen, setIsPickerOpen] = React.useState(false);
+  const [confirmedDate, setConfirmedDate] = React.useState(selectedDate);
+
+  // selectedDate가 변경될 때마다 confirmedDate 업데이트
+  React.useEffect(() => {
+    if (selectedDate) {
+      setConfirmedDate(selectedDate);
+    }
+  }, [selectedDate]);
 
   function handleSubmit(data) {
+    setConfirmedDate(data.selectedDate);
     onSubmit(data.selectedDate);
     toast("날짜가 선택되었습니다", {
       description: (
@@ -101,7 +111,7 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>날짜 선택</FormLabel>
-                  <Popover>
+                  <Popover open={isPickerOpen} onOpenChange={setIsPickerOpen}>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
@@ -124,21 +134,24 @@ function CalendarForm({ onSubmit, onClose, selectedDate }) {
                       <Calendar
                         mode="single"
                         selected={field.value}
-                        onSelect={field.onChange}
+                        onSelect={(date) => {
+                          field.onChange(date);
+                        }}
                         defaultMonth={field.value}
                         disabled={(date) => {
                           const today = new Date();
                           const absoluteMin = new Date("1900-01-01");
-                          const selectedMin = field.value instanceof Date ? field.value : null;
-                          const lowerBound = selectedMin || timelineFrom || absoluteMin;
+                          const lowerBoundTimeline = timelineFrom || absoluteMin;
+                          const blockPastFromConfirmed = (confirmedDate instanceof Date) && date < confirmedDate;
                           const upperBound = timelineTo || today;
                           return (
                             date > today ||
                             date < absoluteMin ||
                             date.getDay() === 0 ||
                             date.getDay() === 6 ||
-                            date < lowerBound ||
-                            date > upperBound
+                            date < lowerBoundTimeline ||
+                            date > upperBound ||
+                            blockPastFromConfirmed
                           );
                         }}
                         captionLayout="dropdown"

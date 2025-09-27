@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Trash2, ChevronLeft } from "lucide-react";
+import { Search, Plus, Trash2, ChevronLeft, X, Loader2 } from "lucide-react";
 import useRealtimeStocks from "../hooks/useRealtimeStocks";
 import useDateStore from "../store/useDateStore";
 import useLoginStore from "../store/useLoginStore";
@@ -33,6 +33,18 @@ export default function BatchBuy() {
 
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState([]); // [{symbol,name,price, qty}]
+
+  // 일괄구매 진행 상태
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [successCount, setSuccessCount] = useState(0);
+  const [failureCount, setFailureCount] = useState(0);
+  const [etaText, setEtaText] = useState("--:--");
+  const [startedAt, setStartedAt] = useState(null);
+  const [cancelRequested, setCancelRequested] = useState(false);
+  const [errors, setErrors] = useState([]); // [{symbol, message}]
+  const abortRef = useRef(null);
   
   // 과거 모드 데이터 (Stocks.jsx와 동일)
   const [histMap, setHistMap] = useState({});
@@ -117,6 +129,14 @@ export default function BatchBuy() {
   const updateQty = (symbol, delta) => setCart((prev) => prev.map((i) => i.symbol === symbol ? { ...i, qty: Math.max(0, (i.qty || 0) + delta) } : i));
   const setQty = (symbol, qty) => setCart((prev) => prev.map((i) => i.symbol === symbol ? { ...i, qty: Math.max(0, qty) } : i));
 
+  const formatEta = (ms) => {
+    if (!Number.isFinite(ms) || ms <= 0) return "--:--";
+    const totalSec = Math.ceil(ms / 1000);
+    const m = String(Math.floor(totalSec / 60)).padStart(2, "0");
+    const s = String(totalSec % 60).padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
   const handleBatchBuy = async () => {
     try {
       const isoDate =
@@ -129,44 +149,85 @@ export default function BatchBuy() {
         return;
       }
 
-      // 순차 호출 (Stocks.jsx 빠른구매와 동일 로직)
-      for (const item of valid) {
+      // 진행 상태 초기화
+      setIsProcessing(true);
+      setProcessedCount(0);
+      setTotalCount(valid.length);
+      setSuccessCount(0);
+      setFailureCount(0);
+      setEtaText("--:--");
+      setStartedAt(Date.now());
+      setCancelRequested(false);
+      setErrors([]);
+      abortRef.current = new AbortController();
+
+      // 순차 호출 + 진행률 업데이트
+      for (let idx = 0; idx < valid.length; idx += 1) {
+        if (cancelRequested) break;
+        const item = valid[idx];
         const quantity = Number(item.qty || 0);
         if (!Number.isFinite(quantity) || quantity <= 0) {
+          setProcessedCount((v) => v + 1);
           continue;
         }
         const priceVal = item.price;
         if (!Number.isFinite(priceVal)) {
-          alert(`${item.symbol}의 현재가를 불러오지 못했습니다.`);
+          setFailureCount((v) => v + 1);
+          setErrors((prev) => [...prev, { symbol: item.symbol, message: "현재가를 불러오지 못했습니다" }]);
+          setProcessedCount((v) => v + 1);
+          const elapsed = Date.now() - (startedAt || Date.now());
+          const done = Math.max(1, idx + 1);
+          const remain = Math.max(0, valid.length - done);
+          setEtaText(formatEta((elapsed / done) * remain));
           continue;
         }
 
-        console.log(`[BatchBuy] ${item.symbol}: price=${priceVal}, qty=${quantity}, date=${isoDate}`);
-        await axios.post(
-          `offer/update`,
-          {
-            price: priceVal,
-            offerDate: isoDate,
-            usersProfileId: lastProfileId,
-            stock: item.symbol,
-            type: "BUY",
-            quantity: quantity,
-          },
-          { withCredentials: true }
-        );
-
-        // 오늘 매수한 종목 로컬 기록 (당일 수익률 0% 표기를 위함) - Stocks.jsx와 동일
         try {
-          const key = `boughtToday:${isoDate}`;
-          const prev = JSON.parse(localStorage.getItem(key) || "[]");
-          if (!prev.includes(item.symbol)) {
-            localStorage.setItem(key, JSON.stringify([...prev, item.symbol]));
+          await axios.post(
+            `offer/update`,
+            {
+              price: priceVal,
+              offerDate: isoDate,
+              usersProfileId: lastProfileId,
+              stock: item.symbol,
+              type: "BUY",
+              quantity: quantity,
+            },
+            { withCredentials: true, signal: abortRef.current?.signal }
+          );
+
+          // 로컬 기록
+          try {
+            const key = `boughtToday:${isoDate}`;
+            const prev = JSON.parse(localStorage.getItem(key) || "[]");
+            if (!prev.includes(item.symbol)) {
+              localStorage.setItem(key, JSON.stringify([...prev, item.symbol]));
+            }
+          } catch (_) {}
+
+          setSuccessCount((v) => v + 1);
+        } catch (e) {
+          // 취소 여부
+          const isCanceled = e?.name === "CanceledError" || e?.code === "ERR_CANCELED";
+          if (isCanceled || cancelRequested) {
+            break;
           }
-        } catch (_) {}
+          setFailureCount((v) => v + 1);
+          setErrors((prev) => [...prev, { symbol: item.symbol, message: "요청에 실패했습니다" }]);
+        } finally {
+          setProcessedCount((v) => v + 1);
+          const elapsed = Date.now() - (startedAt || Date.now());
+          const done = Math.max(1, idx + 1);
+          const remain = Math.max(0, valid.length - done);
+          setEtaText(formatEta((elapsed / done) * remain));
+        }
       }
-      
-      alert("일괄 매수가 완료되었습니다.");
-      navigate(-1);
+
+      setIsProcessing(false);
+      if (!cancelRequested) {
+        alert("일괄 매수가 완료되었습니다.");
+        navigate(-1);
+      }
     } catch (e) {
       console.error(e);
       alert("일괄 매수에 실패했습니다. 다시 시도해주세요.");
@@ -296,8 +357,90 @@ export default function BatchBuy() {
             ))}
           </div>
         )}
-        <Button className="w-full mt-3" variant="confirm" onClick={handleBatchBuy}>선택 종목 일괄 매수</Button>
+        <Button className="w-full mt-3" variant="confirm" onClick={handleBatchBuy} disabled={isProcessing}>
+          {isProcessing ? "진행 중..." : "선택 종목 일괄 매수"}
+        </Button>
       </div>
+      {/* 진행 상태 모달 */}
+      {isProcessing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black bg-opacity-50" />
+          <div className="relative bg-slate-800 border border-slate-700 rounded-2xl w-[92vw] max-w-md mx-4 p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white text-sm font-semibold">일괄 매수 진행중</h3>
+              <button
+                className="text-gray-400 hover:text-white"
+                onClick={() => {
+                  setCancelRequested(true);
+                  try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+                }}
+                aria-label="취소"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-3 text-xs text-gray-300">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>서버에 주문을 전송하고 있어요...</span>
+            </div>
+
+            <div className="mb-2">
+              <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${totalCount > 0 ? Math.round((processedCount / totalCount) * 100) : 0}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+                <span>
+                  {processedCount}/{totalCount} 처리됨 ({totalCount > 0 ? Math.round((processedCount / totalCount) * 100) : 0}%)
+                </span>
+                <span>ETA {etaText}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center text-xs mt-3">
+              <div className="bg-slate-700 rounded p-2">
+                <div className="text-gray-400 mb-1">성공</div>
+                <div className="text-emerald-400 font-semibold">{successCount}</div>
+              </div>
+              <div className="bg-slate-700 rounded p-2">
+                <div className="text-gray-400 mb-1">실패</div>
+                <div className="text-red-400 font-semibold">{failureCount}</div>
+              </div>
+              <div className="bg-slate-700 rounded p-2">
+                <div className="text-gray-400 mb-1">남은 작업</div>
+                <div className="text-white font-semibold">{Math.max(0, totalCount - processedCount)}</div>
+              </div>
+            </div>
+
+            {errors && errors.length > 0 && (
+              <div className="mt-3 max-h-28 overflow-y-auto bg-slate-900 border border-slate-700 rounded p-2 text-[11px] text-red-300">
+                {errors.slice(-5).map((e, i) => (
+                  <div key={`${e.symbol}-${i}`}>[{e.symbol}] {e.message}</div>
+                ))}
+                {errors.length > 5 && (
+                  <div className="text-gray-400">외 {errors.length - 5}건 더 있음</div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                className="flex-1 bg-slate-600 hover:bg-slate-700 text-white py-2 rounded-lg text-sm"
+                onClick={() => {
+                  setCancelRequested(true);
+                  try { abortRef.current && abortRef.current.abort(); } catch (_) {}
+                  setIsProcessing(false);
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
