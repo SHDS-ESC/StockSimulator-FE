@@ -1,3 +1,4 @@
+import { is } from "date-fns/locale";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -7,12 +8,20 @@ const useDateStore = create(
       // 초기 상태
       currentDate: new Date().toISOString().split("T")[0], // YYYY-MM-DD 형식
       isTurnOver: false,
-      skipNotice: null, // { from, to, skipped }
+      skipNotice: null,
+      // { from, to, skipped }
+      
+      isEnding : false,
+
+      setIsEnding: () => 
+        set({
+          isEnding : true
+        }),
 
       // 오늘 날짜로 초기화
       initToday: (currentDate) =>
         set({
-          currentDate: currentDate,
+          currentDate: currentDate
         }),
 
       // 다음 턴으로 이동

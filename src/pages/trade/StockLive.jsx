@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import UnifiedChart, { TradeRealtimeWidget } from "../../components/UnifiedChart";
 import axios from "../../util/axiosInstance";
 import axiosInstance from "../../util/axiosInstance";
@@ -27,6 +27,7 @@ export default function StockLive() {
   const [quantity, setQuantity] = useState(0);
   const [trade, setTrade] = useState("");
   const [executedQty, setExecutedQty] = useState(0); // 거래된 값
+  const [meta, setMeta] = useState({ sector: null, industry: null });
 
   // 매수/매도 로직
   const handleUpdateStockAmount = async (type, quantity) => {
@@ -47,6 +48,17 @@ export default function StockLive() {
         },
         { withCredentials: true }
       );
+
+      // 오늘 매수한 종목 로컬 기록 (당일 수익률 0% 표기를 위함)
+      try {
+        if (type === "BUY") {
+          const key = `boughtToday:${isoDate}`;
+          const prev = JSON.parse(localStorage.getItem(key) || "[]");
+          if (!prev.includes(s)) {
+            localStorage.setItem(key, JSON.stringify([...prev, s]));
+          }
+        }
+      } catch (_) {}
 
       if (type === "BUY") {
         setTrade("매수");
@@ -119,12 +131,31 @@ export default function StockLive() {
 
   const [showModal, setShowModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
-  const [guideTab, setGuideTab] = useState('ma');
+  const [guideTab, setGuideTab] = useState('candle');
 
   const handleModalClosed = () => {
     setShowModal(false);
     setQuantity(0);
   };
+
+  // 티커 메타 정보 로드 (sector, industry)
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (!s) return;
+        const res = await axiosInstance.get('/db/symbols');
+        const arr = Array.isArray(res?.data?.symbols) ? res.data.symbols : [];
+        const found = arr.find(it => String(it.ticker).toUpperCase() === s);
+        if (!active) return;
+        setMeta({ sector: found?.sector || null, industry: found?.industry || null });
+      } catch (_) {
+        if (!active) return;
+        setMeta({ sector: null, industry: null });
+      }
+    })();
+    return () => { active = false; };
+  }, [s]);
 
   // 가격/등락률 계산: 과거는 DB 캔들(/db/candles)에서 "요청일 이하"만 사용해 계산, 실시간은 Redis
   useEffect(() => {
@@ -168,7 +199,7 @@ export default function StockLive() {
         setPrice(Number(last.close));
         setPrevClose(prev ? Number(prev.close) : null);
         setErr(null);
-      } catch (_) {
+      } catch {
         if (!active) return;
         setPrice(null);
         setPrevClose(null);
@@ -252,43 +283,108 @@ export default function StockLive() {
  
   };
 
+  // 길게 누르기 가속 증가/감소
+  const holdTimerRef = useRef(null);
+  const holdDelayRef = useRef(300);
+  const holdActiveRef = useRef(false);
+  const startHold = (mode) => {
+    holdActiveRef.current = true;
+    holdDelayRef.current = 300; // 초기 지연
+    const tick = () => {
+      if (!holdActiveRef.current) return;
+      if (mode === 'inc') setQuantity((prev) => prev + 1);
+      else setQuantity((prev) => Math.max(0, prev - 1));
+      holdDelayRef.current = Math.max(50, holdDelayRef.current - 20); // 점점 빠르게
+      holdTimerRef.current = setTimeout(tick, holdDelayRef.current);
+    };
+    // 첫 증가까지 약간 지연을 줘서 단일 클릭과 구분
+    holdTimerRef.current = setTimeout(tick, holdDelayRef.current);
+  };
+  const stopHold = () => {
+    holdActiveRef.current = false;
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdDelayRef.current = 300;
+  };
+  useEffect(() => {
+    return () => stopHold();
+  }, []);
+
   return (
     <div className="container">
       <div className="card" style={{ marginBottom: 12 }}>
         <div
           className="row"
-          style={{ justifyContent: "space-between", width: "100%", alignItems: "center", flexWrap: "nowrap" }}
+          style={{ justifyContent: "space-between", width: "100%", alignItems: "center", flexWrap: "nowrap", gap: 8 }}
         >
-          <strong style={{ fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "60%" }}>{s || "LIVE"}</strong>
+          <strong style={{ fontSize: 18, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "40%" }}>{s || "LIVE"}</strong>
+          {(meta.sector || meta.industry) && (
+            <div className="row" style={{ gap: 6, alignItems: "center", justifyContent: "center", flexGrow: 1, overflow: "hidden" }}>
+              {meta.sector && (
+                <span
+                  title={String(meta.sector)}
+                  style={{
+                    maxWidth: "40%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    background: "#0f172a",
+                    border: "1px solid #334155",
+                    color: "#93c5fd",
+                    padding: "2px 8px",
+                    borderRadius: 9999,
+                    fontSize: 12,
+                  }}
+                >
+                  {String(meta.sector)}
+                </span>
+              )}
+              {meta.industry && (
+                <span
+                  title={String(meta.industry)}
+                  style={{
+                    maxWidth: "40%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    background: "#0f172a",
+                    border: "1px solid #475569",
+                    color: "#cbd5e1",
+                    padding: "2px 8px",
+                    borderRadius: 9999,
+                    fontSize: 12,
+                  }}
+                >
+                  {String(meta.industry)}
+                </span>
+              )}
+            </div>
+          )}
           <button className="btn" onClick={() => navigate(-1)} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>
             뒤로
           </button>
         </div>
       </div>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "nowrap", justifyContent: "space-between" }}>
-          <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "nowrap" }}>
-            <span className="muted" style={{ whiteSpace: "nowrap" }}>현재가</span>
-            <strong style={{ whiteSpace: "nowrap" }}>
-              {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
-            </strong>
-            <span style={{
-              color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350",
-              whiteSpace: "nowrap",
-              fontSize: "14px"
-            }}>
-              {Number.isFinite(Number(change))
-                ? `${(change ?? 0) >= 0 ? '+' : ''}${change.toFixed(2)} (${Number(changePct).toFixed(2)}%)`
-                : "-"}
-            </span>
-            {err && <span className="muted" style={{ fontSize: "12px" }}>{err}</span>}
-          </div>
-
+        <div className="row" style={{ gap: 12 }}>
+          <span className="muted">현재가</span>
+          <strong>
+            {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
+          </strong>
+          <span className="muted">전일대비</span>
+          <span style={{ color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350" }}>
+            {Number.isFinite(Number(change))
+              ? `${change.toFixed(2)} (${Number(changePct).toFixed(2)}%)`
+              : "-"}
+          </span>
+          {err && <span className="muted">{err}</span>}
+          <div style={{ flex: 1 }} />
           <button
             onClick={() => setShowGuide(true)}
             title="지표 가이드"
             className="px-2.5 py-1.5 text-xs rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-white inline-flex items-center gap-1.5"
-            style={{ whiteSpace: "nowrap", flexShrink: 0 }}
           >
             <HelpCircle size={14} />
             <span>지표 가이드</span>
@@ -312,19 +408,40 @@ export default function StockLive() {
       <div className="card" style={{ marginTop: 12, marginBottom: 8 }}>
         <div className="row" style={{ gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-            <button onClick={handleDecrease} className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded">-</button>
+            <button
+              onClick={handleDecrease}
+              onMouseDown={() => startHold('dec')}
+              onMouseUp={stopHold}
+              onMouseLeave={stopHold}
+              onTouchStart={(e) => { e.preventDefault(); startHold('dec'); }}
+              onTouchEnd={stopHold}
+              className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded"
+            >-</button>
             <input
               type="number"
               min={0}
               value={quantity}
-              onChange={(e) => setQuantity(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e) => {
+                const v = String(e.target.value ?? "");
+                const cleaned = v.replace(/^0+(?=\d)/, "");
+                const n = Math.max(0, parseInt(cleaned, 10) || 0);
+                setQuantity(n);
+              }}
               className="w-20 text-center bg-slate-900 text-white border border-slate-600 rounded px-2 py-1"
             />
-            <button onClick={handleIncrease} className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded">+</button>
+            <button
+              onClick={handleIncrease}
+              onMouseDown={() => startHold('inc')}
+              onMouseUp={stopHold}
+              onMouseLeave={stopHold}
+              onTouchStart={(e) => { e.preventDefault(); startHold('inc'); }}
+              onTouchEnd={stopHold}
+              className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded"
+            >+</button>
           </div>
           <div className="row wrap" style={{ gap: 6 }}>
             {[1,5,10,20,50].map((n) => (
-              <button key={n} onClick={() => setQuantity(n)} className="px-2 py-1 text-sm bg-slate-800 text-white border border-slate-600 rounded hover:bg-slate-700">{n}</button>
+              <button key={n} onClick={() => setQuantity((prev) => Math.max(0, Number(prev) + n))} className="px-2 py-1 text-sm bg-slate-800 text-white border border-slate-600 rounded hover:bg-slate-700">{n}</button>
             ))}
           </div>
         </div>
@@ -370,13 +487,15 @@ export default function StockLive() {
           <DialogHeader>
             <DialogTitle className="text-white">보조 지표 가이드</DialogTitle>
           </DialogHeader>
-
+          
           {/* 탭 네비게이션 */}
           <div className="flex space-x-1 bg-slate-900 rounded-lg p-1">
             {[
+              { id: 'candle', name: '캔들' },
               { id: 'ma', name: '이평선' },
               { id: 'volume', name: '거래량' },
-              { id: 'rsi', name: 'RSI' }
+              { id: 'rsi', name: 'RSI' },
+              { id: 'tips', name: '활용팁' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -394,6 +513,25 @@ export default function StockLive() {
 
           {/* 탭 콘텐츠 */}
           <div className="text-[13px] leading-6 min-h-[200px]">
+            {guideTab === 'candle' && (
+              <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-2">캔들차트(OHLC)</h4>
+                <p className="text-gray-300 mb-3">
+                  양봉(상승)은 종가&gt;시가, 음봉(하락)은 종가&lt;시가. 긴 심지/갭, 지지·저항 부근의 반전 패턴은 추세 전환 신호일 수 있습니다.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-green-400 text-xs">▲</span>
+                    <span className="text-gray-300">지지선 + 장대양봉: 매수 관심</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400 text-xs">▼</span>
+                    <span className="text-gray-300">저항선 + 장대음봉: 이익실현/리스크 관리</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {guideTab === 'ma' && (
               <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
                 <h4 className="text-white font-semibold mb-2">이동평균선(MA20/50/200)</h4>
@@ -440,7 +578,7 @@ export default function StockLive() {
               <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
                 <h4 className="text-white font-semibold mb-2">RSI(14)</h4>
                 <p className="text-gray-300 mb-3">
-                  70↑ 과매수, 30↓ 과매도. 강한 상승장에서는 70 이상이 계속 유지될 수 있으니, 주가는 오르는데 RSI가 떨어지는 '힘 빠짐 신호'를 주의깊게 봐야 합니다.
+                  70↑ 과매수, 30↓ 과매도. 추세장에서는 과열 구간 지속 가능—다이버전스(가격↑, RSI↓)를 함께 체크하세요.
                 </p>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
@@ -455,8 +593,31 @@ export default function StockLive() {
               </div>
             )}
 
+            {guideTab === 'tips' && (
+              <div className="bg-slate-900/80 border border-slate-600 rounded-lg p-4">
+                <h4 className="text-white font-semibold mb-2">활용 팁 · 리스크</h4>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-green-400 text-xs">📍</span>
+                    <span className="text-gray-300">진입: 정배열 + RSI 신호 + 거래량 확인</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-400 text-xs">🎯</span>
+                    <span className="text-gray-300">청산: 저항·이격 과도·데드크로스·RSI 이탈</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400 text-xs">🛑</span>
+                    <span className="text-gray-300">손절: 최근 스윙 저점 하회(또는 MA20 이탈)</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-purple-400 text-xs">⚖️</span>
+                    <span className="text-gray-300">분할: 확률적 신호 특성 고려해 분할 진입/청산</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-
+          
           <DialogFooter>
             <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white" onClick={() => setShowGuide(false)}>닫기</Button>
           </DialogFooter>
