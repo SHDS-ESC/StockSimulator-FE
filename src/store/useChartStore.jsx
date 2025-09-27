@@ -1,8 +1,11 @@
 // src/store/useChartStore.js
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import * as echarts from "echarts";
 
-const useChartStore = create((set, get) => ({
+const useChartStore = create(
+  persist(
+    (set, get) => ({
   portfolioList: [], // 차트 데이터
   chartInstance: null, // ECharts 인스턴스
 
@@ -71,16 +74,37 @@ const useChartStore = create((set, get) => ({
       });
     };
 
+    // 초기 그리기
     updateChart();
+
+    // portfolioList 변경 시 자동 업데이트 구독
+    const unsubscribe = useChartStore.subscribe(
+      (state) => state.portfolioList,
+      () => {
+        try {
+          updateChart();
+        } catch (e) {
+          console.warn("차트 업데이트 실패", e);
+        }
+      }
+    );
 
     window.addEventListener("resize", updateChart);
 
     return () => {
+      unsubscribe?.();
       window.removeEventListener("resize", updateChart);
       myChart.dispose();
       set({ chartInstance: null });
     };
   },
-}));
+    }),
+    {
+      name: "chart-store",
+      partialize: (state) => ({ portfolioList: state.portfolioList }),
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);
 
 export default useChartStore;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight,
@@ -23,18 +23,22 @@ const formatCurrency = (value) => {
     typeof value === "string" ? parseFloat(value.replace(/[$,]/g, "")) : value;
 
   if (!Number.isFinite(numValue)) return "$ 0";
+  
+  // 0.01 미만이면 0으로 처리 (+ - 없이)
+  if (Math.abs(numValue) < 0.01) return "$ 0";
 
   const absValue = Math.abs(numValue);
   const formatted = absValue.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 0, // 소수점 없애기
+    minimumFractionDigits: 0,
   });
 
   return numValue < 0
     ? `- ${formatted.replace("$", "$ ")}`
     : `+${formatted.replace("$", "$ ")}`;
 };
+
 
 const formatCurrencyValue = (value) => {
   if (value === null || value === undefined || value === "" || value === "0")
@@ -60,27 +64,62 @@ const formatPercentage = (value) => {
   const numValue =
     typeof value === "string" ? parseFloat(value.replace(/[+%]/g, "")) : value;
   if (!Number.isFinite(numValue)) return "0.00%";
+  
+  // 0.01% 미만이면 0.00%로 처리 (+ - 없이)
+  if (Math.abs(numValue) < 0.01) return "0.00%";
+  
   return `${numValue >= 0 ? "+" : ""}${numValue.toFixed(2)}%`;
 };
 
-const formatVolume = (val) => {
-  const n = parseFloat(String(val ?? "").replace(/[^0-9.-]/g, ""));
-  if (!Number.isFinite(n)) return "-";
-  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+// 거래량 포맷터 (안전 처리)
+const formatVolume = (value) => {
+  const n = typeof value === "number" ? value : parseFloat(String(value || "0").replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
   return n.toLocaleString("en-US");
 };
 
+
 const parseNumericValue = (val) => {
   if (val === null || val === undefined || val === "") return 0;
-  const n = parseFloat(String(val).replace("%", "").replace(/\+/g, "").trim());
-  return Number.isFinite(n) ? n : 0;
+  const cleaned = String(val).replace(/[^0-9.-]/g, "");
+  const n = parseFloat(cleaned);
+  if (!Number.isFinite(n)) return 0;
+  return Math.abs(n) < 1e-9 ? 0 : n;
 };
 
 const getColorClass = (value) => {
-  if (value > 0) return "text-red-500";
-  if (value < 0) return "text-blue-400";
+  const n = typeof value === 'number' ? value : parseNumericValue(value);
+  if (!Number.isFinite(n) || Math.abs(n) < 1e-9) return "text-gray-400";
+  return n > 0 ? "text-red-500" : "text-blue-400";
+};
+
+// 금액과 퍼센트를 함께 판단해 0이면 회색, 양수 빨강, 음수 파랑
+const getDeltaClass = (amount, percent) => {
+  const a = parseNumericValue(amount);
+  const p = parseNumericValue(percent);
+  
+  // 문자열 상으로도 0%라면 회색
+  const percentStr = String(percent || "").replace(/\s/g, "");
+  const isZeroPercentText = /^(\+|−|-)?0(?:\.0+)?%?$/.test(percentStr);
+  
+  // 0.01% 미만은 모두 회색으로 처리
+  if (Math.abs(p) < 0.01 && Math.abs(a) < 0.01) {
+    return "text-gray-400";
+  }
+  
+  if (isZeroPercentText && Math.abs(a) < 1e-6) {
+    return "text-gray-400";
+  }
+  
+  // 부호 판정은 퍼센트 우선, 그다음 금액
+  if (p > 0 || (!Number.isFinite(p) && a > 0)) return "text-red-500";
+  if (p < 0 || (!Number.isFinite(p) && a < 0)) return "text-blue-400";
+  if (a > 0) return "text-red-500";
+  if (a < 0) return "text-blue-400";
+  
   return "text-gray-400";
 };
 
@@ -151,6 +190,9 @@ const HomePage = () => {
     selectedProfile?.state,
   ]);
 
+  const {setIsEnding} = useDateStore();
+  
+
   const isHistorical = !isRealtime;
 
   const simDate = useMemo(() => {
@@ -201,12 +243,35 @@ const HomePage = () => {
     };
   }, [selectedProfile, startInvested]);
 
+  // 엔딩 팝업 중복 방지용: 현재 processDate 기준 1회만 표시
+  const endingCheckRef = useRef(false);
+
   useEffect(() => {
+    if (!endingCheckRef.current) {
+      try {
+        const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+        const endingDate = profile.timelineTo ? new Date(profile.timelineTo) : null;
+        const procDate = profile.processDate ? String(profile.processDate) : null;
+        const isRealTime = profile.name === "실시간" || profile?.timelineId === 9;
+        const shownKey = procDate ? `endingShown:${procDate}` : null;
+
+        if (!isRealTime && endingDate && procDate) {
+          const current = new Date(procDate + "T00:00:00");
+          const alreadyShown = shownKey ? localStorage.getItem(shownKey) === "1" : false;
+          if (!alreadyShown && endingDate.getTime() < current.getTime()) {
+            setIsEnding(true);
+            if (shownKey) localStorage.setItem(shownKey, "1");
+          }
+        }
+      } catch {}
+      endingCheckRef.current = true;
+    }
+
     if (!isHistorical || !dateKey) {
-      setHistTop([]);
-      setHistLoading(false);
-      setHistError(null);
-      return;
+    setHistTop([]);
+    setHistLoading(false);
+    setHistError(null);
+    return;
     }
 
     const cachedForDate = histCache[dateKey] || {};
@@ -442,7 +507,7 @@ const HomePage = () => {
   }, [email, lastProfileId, currentDate, loadProfile]);
 
   return (
-    <div className="h-full pt-5 pb-10">
+    <div className="h-full pt-2">
       {/* 전체 콘텐츠 영역 */}
 
       
@@ -557,9 +622,15 @@ const HomePage = () => {
         <div className="bg-slate-950 px-4 py-2">
           <div className="bg-slate-800 rounded-xl p-3">
             <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
-            {!selectedProfile?.id ||
-            selectedProfile?.id === 0 ||
-            holdingStocks.length === 0 ? (
+            {
+            holdingStocks.length === 0 ?
+            (
+                <div className="space-y-2">
+                 <p className="text-gray-400 text-sm font-semibold=">보유한 주식이 없습니다.</p>
+              </div>
+            ) :
+            !selectedProfile?.id ||
+            selectedProfile?.id === 0  ? (
               // Shimmer 스켈레톤 UI
               <div className="space-y-2">
                 {[...Array(3)].map((_, index) => (
@@ -623,12 +694,26 @@ const HomePage = () => {
                           <p className="text-white font-semibold text-sm">
                             {formatCurrencyValue(stock.price)}
                           </p>
-                          <p
-                            className={`text-xs ${getColorClass(parseNumericValue(stock.change))}`}
-                          >
-                            {formatCurrency(stock.changeAmount)} (
-                            {formatPercentage(stock.change)})
-                          </p>
+                          {(() => {
+                            try {
+                              const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+                              const todayKey = String(profile?.processDate || "");
+                              const bought = JSON.parse(localStorage.getItem(`boughtToday:${todayKey}`) || "[]");
+                              const isNewBuy = bought.includes(stock.ticker);
+                              if (isNewBuy) {
+                                return (
+                                  <p className={`text-xs ${getDeltaClass(0, 0)}`}>
+                                    {formatCurrency(0)} ({formatPercentage(0)})
+                                  </p>
+                                );
+                              }
+                            } catch (_) {}
+                            return (
+                              <p className={`text-xs ${getDeltaClass(stock.changeAmount, stock.change)}`}>
+                                {formatCurrency(stock.changeAmount)} ({formatPercentage(stock.change)})
+                              </p>
+                            );
+                          })()}
                         </div>
                       </div>
                     </button>
