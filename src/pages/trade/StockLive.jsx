@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import UnifiedChart, { TradeRealtimeWidget } from "../../components/UnifiedChart";
 import axios from "../../util/axiosInstance";
 import axiosInstance from "../../util/axiosInstance";
@@ -168,7 +168,7 @@ export default function StockLive() {
         setPrice(Number(last.close));
         setPrevClose(prev ? Number(prev.close) : null);
         setErr(null);
-      } catch (_) {
+      } catch {
         if (!active) return;
         setPrice(null);
         setPrevClose(null);
@@ -252,6 +252,35 @@ export default function StockLive() {
  
   };
 
+  // 길게 누르기 가속 증가/감소
+  const holdTimerRef = useRef(null);
+  const holdDelayRef = useRef(300);
+  const holdActiveRef = useRef(false);
+  const startHold = (mode) => {
+    holdActiveRef.current = true;
+    holdDelayRef.current = 300; // 초기 지연
+    const tick = () => {
+      if (!holdActiveRef.current) return;
+      if (mode === 'inc') setQuantity((prev) => prev + 1);
+      else setQuantity((prev) => Math.max(0, prev - 1));
+      holdDelayRef.current = Math.max(50, holdDelayRef.current - 20); // 점점 빠르게
+      holdTimerRef.current = setTimeout(tick, holdDelayRef.current);
+    };
+    // 첫 증가까지 약간 지연을 줘서 단일 클릭과 구분
+    holdTimerRef.current = setTimeout(tick, holdDelayRef.current);
+  };
+  const stopHold = () => {
+    holdActiveRef.current = false;
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdDelayRef.current = 300;
+  };
+  useEffect(() => {
+    return () => stopHold();
+  }, []);
+
   return (
     <div className="container">
       <div className="card" style={{ marginBottom: 12 }}>
@@ -312,19 +341,40 @@ export default function StockLive() {
       <div className="card" style={{ marginTop: 12, marginBottom: 8 }}>
         <div className="row" style={{ gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-            <button onClick={handleDecrease} className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded">-</button>
+            <button
+              onClick={handleDecrease}
+              onMouseDown={() => startHold('dec')}
+              onMouseUp={stopHold}
+              onMouseLeave={stopHold}
+              onTouchStart={(e) => { e.preventDefault(); startHold('dec'); }}
+              onTouchEnd={stopHold}
+              className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded"
+            >-</button>
             <input
               type="number"
               min={0}
               value={quantity}
-              onChange={(e) => setQuantity(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e) => {
+                const v = String(e.target.value ?? "");
+                const cleaned = v.replace(/^0+(?=\d)/, "");
+                const n = Math.max(0, parseInt(cleaned, 10) || 0);
+                setQuantity(n);
+              }}
               className="w-20 text-center bg-slate-900 text-white border border-slate-600 rounded px-2 py-1"
             />
-            <button onClick={handleIncrease} className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded">+</button>
+            <button
+              onClick={handleIncrease}
+              onMouseDown={() => startHold('inc')}
+              onMouseUp={stopHold}
+              onMouseLeave={stopHold}
+              onTouchStart={(e) => { e.preventDefault(); startHold('inc'); }}
+              onTouchEnd={stopHold}
+              className="bg-slate-200 hover:bg-slate-300 text-black text-lg font-bold px-3 py-1 rounded"
+            >+</button>
           </div>
           <div className="row wrap" style={{ gap: 6 }}>
             {[1,5,10,20,50].map((n) => (
-              <button key={n} onClick={() => setQuantity(n)} className="px-2 py-1 text-sm bg-slate-800 text-white border border-slate-600 rounded hover:bg-slate-700">{n}</button>
+              <button key={n} onClick={() => setQuantity((prev) => Math.max(0, Number(prev) + n))} className="px-2 py-1 text-sm bg-slate-800 text-white border border-slate-600 rounded hover:bg-slate-700">{n}</button>
             ))}
           </div>
         </div>

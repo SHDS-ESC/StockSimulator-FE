@@ -306,6 +306,16 @@ button:focus-visible {
   color: #94a3b8;
 }
 
+/* Number input 스피너 제거 (가운데 정렬 시 시각적 밀림 방지) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 /* Text */
 .muted {
   color: var(--muted, #94a3b8);
