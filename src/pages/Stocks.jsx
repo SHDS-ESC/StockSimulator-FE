@@ -461,13 +461,6 @@ const Stocks = () => {
 								</div>
 							)}
 
-							{/* Redis 데이터 안내 */}
-							<div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-								<div className="flex items-center gap-2 text-blue-400 text-sm">
-									<AlertCircle className="w-4 h-4" />
-									<span>Redis 데이터: 백그라운드 스케줄러가 20분마다 자동 갱신하는 주식 데이터 | 갱신 없이 읽기만</span>
-								</div>
-							</div>
 						</div>
 					</div>
 				) : (
