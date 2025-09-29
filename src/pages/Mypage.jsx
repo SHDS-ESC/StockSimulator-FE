@@ -1,5 +1,11 @@
 // src/pages/MyPage.jsx
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  useMemo,
+} from "react";
 import { Users, ChevronRight, ArrowLeft, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import useLoginStore from "@/store/useLoginStore";
@@ -7,7 +13,6 @@ import useDateStore from "@/store/useDateStore";
 import useChartStore from "@/store/useChartStore";
 import { Badge } from "@/components/ui/badge";
 import axiosInstance from "@/util/axiosInstance";
-import { format } from "date-fns";
 
 const MyPage = () => {
   const navigate = useNavigate();
@@ -30,14 +35,17 @@ const MyPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { email, level, updatedAt, lastProfileId, setLastProfileId, clear } =
     useLoginStore();
-  const { currentDate } = useDateStore();
+  const { currentDate, setIsEnding } = useDateStore();
+  const [statusFilter, setStatusFilter] = useState("all"); // all | ended | active
 
   // ✅ zustand 차트 스토어만 사용 (로컬 차트 인스턴스 관리 제거)
   const { portfolioList, setPortfolioList, initChart } = useChartStore();
 
   const chartRef = useRef(null);
+  const endingCheckRef = useRef(false);
   const [startInvested, setStartInvested] = useState(0);
   const [showHoldings, setShowHoldings] = useState(false); // 보유종목 토글 상태
+  const [profileStats, setProfileStats] = useState({}); // { [id]: { currentAssets, plAmount, plPercent } }
 
   // App.jsx와 동일한 getRandomColor 함수
   function getRandomColor() {
@@ -153,7 +161,7 @@ const MyPage = () => {
           {
             userProfileId: profileId,
             processDate: targetDate,
-            prevProcessDate: targetDate
+            prevProcessDate: targetDate,
           }
         );
 
@@ -258,6 +266,110 @@ const MyPage = () => {
     if (email) loadProfile();
   }, [email, loadProfile]);
 
+  // 엔딩 팝업 중복 방지 및 마이페이지 진입 시 엔딩 조건 검사
+  useEffect(() => {
+    if (endingCheckRef.current) return;
+    try {
+      const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+      const endingDate = profile.timelineTo
+        ? new Date(profile.timelineTo)
+        : null;
+      const procDate = profile.processDate ? String(profile.processDate) : null;
+      const isRealTime = profile.name === "실시간" || profile?.timelineId === 9;
+      const shownKey = procDate ? `endingShown:${procDate}` : null;
+
+      if (!isRealTime && endingDate && procDate) {
+        const current = new Date(procDate + "T00:00:00");
+        const alreadyShown = shownKey
+          ? localStorage.getItem(shownKey) === "1"
+          : false;
+        if (!alreadyShown && endingDate.getTime() < current.getTime()) {
+          setIsEnding(true);
+          if (shownKey) localStorage.setItem(shownKey, "1");
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    endingCheckRef.current = true;
+  }, [setIsEnding]);
+
+  // 프로필별 현재 자산/손익 계산 (목록 표시용)
+  useEffect(() => {
+    if (!profiles || profiles.length === 0) {
+      setProfileStats({});
+      return;
+    }
+    let active = true;
+    const run = async () => {
+      try {
+        const result = await Promise.all(
+          profiles.map(async (p) => {
+            const detail = await fetchProfileDetail(p.id);
+            if (!detail) return [p.id, null];
+            const totalCurrentPrice = await fetchStocks(
+              p.id,
+              detail.processDate
+            );
+            const totalCurrent =
+              (detail.cashBalance || 0) + (totalCurrentPrice || 0);
+            const initial = detail.seedMoney || 0;
+            const plAmount = totalCurrent - initial;
+            const plPercent = initial > 0 ? (plAmount / initial) * 100 : 0;
+            return [p.id, { currentAssets: totalCurrent, plAmount, plPercent }];
+          })
+        );
+        if (!active) return;
+        const map = {};
+        for (const [id, stats] of result) {
+          if (id != null && stats) map[id] = stats;
+        }
+        setProfileStats(map);
+      } catch {
+        // ignore errors per-profile
+      }
+    };
+    run();
+    return () => {
+      active = false;
+    };
+  }, [profiles, fetchProfileDetail, fetchStocks]);
+
+  // 프로필 종료 여부 판별
+  const isProfileEnded = useCallback((p) => {
+    try {
+      const isRealTime = p?.name === "실시간" || p?.timelineId === 9;
+      if (isRealTime) return false;
+      const toRaw = p?.timelineTo;
+      if (!toRaw) return false;
+      const toStr = new Date(toRaw).toISOString().slice(0, 10);
+      const curStr = String(p?.processDate || "");
+      if (!curStr) return false;
+      return curStr > toStr;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // 필터 적용된 프로필 목록
+  const filteredProfiles = useMemo(() => {
+    const base = profiles.filter((p) => {
+      const ended = isProfileEnded(p);
+      if (statusFilter === "ended") return ended;
+      if (statusFilter === "active") return !ended;
+      return true;
+    });
+    if (statusFilter === "all") {
+      // 진행중 우선, 종료는 뒤로 정렬
+      return [...base].sort((a, b) => {
+        const aEnded = isProfileEnded(a) ? 1 : 0;
+        const bEnded = isProfileEnded(b) ? 1 : 0;
+        return aEnded - bEnded;
+      });
+    }
+    return base;
+  }, [profiles, statusFilter, isProfileEnded]);
+
   // 차트 초기화는 위에서 이미 처리됨 (App.jsx와 동일)
 
   // ---- 핸들러 ----
@@ -319,6 +431,10 @@ const MyPage = () => {
     </div>
   );
 
+  const NicknameSkeleton = () => (
+    <div className="h-5 w-28 bg-slate-700 rounded animate-pulse" />
+  );
+
   const SkeletonHeader = () => (
     <div className="bg-slate-900 sticky top-0 z-50 border-b border-slate-700">
       <div className="px-4 py-3">
@@ -355,7 +471,7 @@ const MyPage = () => {
     <div className="min-h-screen bg-slate-950 pb-20">
       {/* 헤더 */}
       <div className="bg-slate-900 sticky top-0 z-50 border-b border-slate-700">
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
@@ -401,24 +517,64 @@ const MyPage = () => {
                 포트폴리오를 확인할 프로필을 선택하세요
               </p>
               <p className="text-xs text-gray-500 mt-2">
-                프로필 수: {profiles.length}개
+                프로필 수: {filteredProfiles.length}개
               </p>
+            </div>
+
+            {/* 상태 필터 */}
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <button
+                onClick={() => setStatusFilter("all")}
+                className={`px-3 py-1 rounded-full text-xs border ${
+                  statusFilter === "all"
+                    ? "bg-slate-600 text-white border-slate-500"
+                    : "bg-slate-800 text-gray-300 border-slate-700 hover:bg-slate-700"
+                }`}
+              >
+                전체
+              </button>
+              <button
+                onClick={() => setStatusFilter("active")}
+                className={`px-3 py-1 rounded-full text-xs border ${
+                  statusFilter === "active"
+                    ? "bg-slate-600 text-white border-slate-500"
+                    : "bg-slate-800 text-gray-300 border-slate-700 hover:bg-slate-700"
+                }`}
+              >
+                진행중
+              </button>
+              <button
+                onClick={() => setStatusFilter("ended")}
+                className={`px-3 py-1 rounded-full text-xs border ${
+                  statusFilter === "ended"
+                    ? "bg-slate-600 text-white border-slate-500"
+                    : "bg-slate-800 text-gray-300 border-slate-700 hover:bg-slate-700"
+                }`}
+              >
+                종료
+              </button>
             </div>
 
             <div className="grid gap-4">
               {isLoading ? (
                 // 로딩 중일 때 스켈레톤 UI 표시
                 [1, 2, 3].map((i) => <SkeletonCard key={i} />)
-              ) : profiles.length > 0 ? (
-                profiles.map((profile) => (
+              ) : filteredProfiles.length > 0 ? (
+                filteredProfiles.map((profile) => (
                   <div
                     key={profile.id}
                     onClick={() => handleProfileSelect(profile)}
                     className={`rounded-2xl p-6 cursor-pointer transition-colors border ${
-                      profile.id === lastProfileId
-                        ? "bg-slate-700 border-green-500/50 hover:bg-slate-600"
-                        : "bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-600"
-                    }`}
+                      isProfileEnded(profile)
+                        ? "bg-slate-800/80 border-slate-600 hover:bg-slate-800"
+                        : profileStats[profile.id]?.plAmount > 0
+                          ? "bg-gradient-to-r from-red-500/10 to-red-500/5 border-red-500/30 hover:bg-red-500/15"
+                          : profileStats[profile.id]?.plAmount < 0
+                            ? "bg-gradient-to-r from-blue-500/10 to-blue-500/5 border-blue-500/30 hover:bg-blue-500/15"
+                            : profile.id === lastProfileId
+                              ? "bg-slate-700 border-green-500/50 hover:bg-slate-600"
+                              : "bg-slate-800 border-slate-700 hover:bg-slate-700 hover:border-slate-600"
+                    } ${profile.id === lastProfileId ? "ring-1 ring-green-500/40" : ""}`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
@@ -440,22 +596,56 @@ const MyPage = () => {
                                 현재 플레이 중
                               </span>
                             )}
+                            {/* 상태 배지 */}
+                            {isProfileEnded(profile) ? (
+                              <span className="text-xs bg-slate-600/40 text-gray-300 px-2 py-1 rounded-full border border-slate-500/40">
+                                종료
+                              </span>
+                            ) : (
+                              <span className="text-xs bg-green-600/20 text-green-400 px-2 py-1 rounded-full border border-green-500/30">
+                                진행중
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-400">
                             {profile.name}
                           </p>
-                          <p className="text-xs text-gray-500">
-                            시드머니: $
-                            {profile.seedMoney
-                              ? Number(profile.seedMoney).toLocaleString(
-                                  "en-US",
-                                  {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  }
-                                )
-                              : "0.00"}
-                          </p>
+                          <div className="text-xs text-gray-500">
+                            <div>
+                              현재 자산: $
+                              {Number(
+                                profileStats[profile.id]?.currentAssets || 0
+                              ).toLocaleString("en-US", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </div>
+                            <div>
+                              손익:{" "}
+                              <span
+                                className={`${(profileStats[profile.id]?.plAmount || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}
+                              >
+                                {(profileStats[profile.id]?.plAmount || 0) >= 0
+                                  ? "+"
+                                  : ""}
+                                $
+                                {Number(
+                                  profileStats[profile.id]?.plAmount || 0
+                                ).toLocaleString("en-US", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}{" "}
+                                (
+                                {(profileStats[profile.id]?.plPercent || 0) >= 0
+                                  ? "+"
+                                  : ""}
+                                {Number(
+                                  profileStats[profile.id]?.plPercent || 0
+                                ).toFixed(2)}
+                                % )
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -468,10 +658,10 @@ const MyPage = () => {
                     <Users className="w-8 h-8 text-gray-400" />
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">
-                    닉네임이 없습니다
+                    표시할 프로필이 없습니다
                   </h3>
                   <p className="text-gray-400 mb-4">
-                    새로운 투자자 닉네임을 생성해보세요
+                    필터를 변경하거나 새로운 투자자 닉네임을 생성해보세요
                   </p>
                   <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
                     닉네임 생성
@@ -489,24 +679,40 @@ const MyPage = () => {
                 {selectedProfile && (
                   <div className="relative">
                     <div className="flex items-center space-x-2 mb-1">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{
-                          backgroundColor: selectedProfile.color || "#3b82f6",
-                        }}
-                      />
-                      <span className="text-xs text-green-400 font-medium">
-                        현재 플레이 중
-                      </span>
+                      {isProfileEnded(selectedProfile) ? (
+                        <>
+                          <div className="w-3 h-3 rounded-full bg-slate-500" />
+                          <span className="text-xs text-gray-300 font-medium">
+                            종료
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{
+                              backgroundColor:
+                                selectedProfile.color || "#3b82f6",
+                            }}
+                          />
+                          <span className="text-xs text-green-400 font-medium">
+                            현재 플레이 중
+                          </span>
+                        </>
+                      )}
                     </div>
-                    <h3
-                      className="text-lg font-semibold text-white relative z-10"
-                      style={{
-                        textShadow: `2px 2px 0px ${selectedProfile.color || "#3b82f6"}`,
-                      }}
-                    >
-                      {selectedProfile.nickname}
-                    </h3>
+                    {isLoading || !selectedProfile?.nickname ? (
+                      <NicknameSkeleton />
+                    ) : (
+                      <h3
+                        className="text-lg font-semibold text-white relative z-10"
+                        style={{
+                          textShadow: `2px 2px 0px ${selectedProfile.color || "#3b82f6"}`,
+                        }}
+                      >
+                        {selectedProfile.nickname}
+                      </h3>
+                    )}
                     <p className="text-sm text-gray-400">
                       {selectedProfile.name}
                     </p>
