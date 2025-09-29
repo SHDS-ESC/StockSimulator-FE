@@ -1391,7 +1391,7 @@ const Chat = () => {
               </div>
             )}
 
-{activeTab === "portfolio" && (
+            {activeTab === "portfolio" && (
               <div className="space-y-4">
                 {/* 포트폴리오 탭 선택 */}
                 <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
