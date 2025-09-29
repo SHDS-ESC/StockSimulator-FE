@@ -32,6 +32,9 @@ const Stocks = () => {
   const [qbTradeType, setQbTradeType] = useState("BUY");
   const [tradeDoneOpen, setTradeDoneOpen] = useState(false);
   const [executedInfo, setExecutedInfo] = useState({ trade: "", qty: 0, symbol: "" });
+  // 에러 다이얼로그 상태
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   // 빠른구매 길게 누르기 가속 상태
   const qbHoldTimerRef = React.useRef(null);
   const qbHoldDelayRef = React.useRef(300);
@@ -155,13 +158,15 @@ const Stocks = () => {
 
   const handleToggleFavorite = async (symbol) => {
     if (!lastProfileId) {
-      alert("로그인이 필요합니다");
+      setErrorMessage("로그인이 필요합니다");
+      setErrorDialogOpen(true);
       return;
     }
 
     const success = await toggleWatchlist(symbol);
     if (!success) {
-      alert("관심종목 토글에 실패했습니다");
+      setErrorMessage("관심종목 토글에 실패했습니다");
+      setErrorDialogOpen(true);
     }
   };
 
@@ -182,12 +187,14 @@ const Stocks = () => {
       if (!quickBuyStock) return;
       const quantity = Number(qbQuantity || 0);
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        alert("수량을 1 이상 입력하세요");
+        setErrorMessage("수량을 1 이상 입력하세요");
+        setErrorDialogOpen(true);
         return;
       }
       const priceVal = getCurrentPrice(quickBuyStock);
       if (!Number.isFinite(priceVal)) {
-        alert("현재가를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        setErrorMessage("현재가를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        setErrorDialogOpen(true);
         return;
       }
 
@@ -218,7 +225,8 @@ const Stocks = () => {
       setTradeDoneOpen(true);
     } catch (e) {
       console.error("빠른거래 실패", e);
-      alert("거래에 실패했습니다. 네트워크 상태를 확인해주세요.");
+      setErrorMessage("거래에 실패했습니다. 네트워크 상태를 확인해주세요.");
+      setErrorDialogOpen(true);
     }
   };
 
@@ -842,6 +850,7 @@ const Stocks = () => {
                 <Button
                   className="w-full h-full rounded-[0.8rem] text-[16px]"
                   variant="destructive"
+                  disabled={!Number.isFinite(qbQuantity) || qbQuantity <= 0}
                   onClick={async () => {
                     await handleQuickTrade("SELL");
                   }}
@@ -851,6 +860,7 @@ const Stocks = () => {
                 <Button
                   className="w-full h-full rounded-[0.8rem] text-[16px]"
                   variant="confirm"
+                  disabled={!Number.isFinite(qbQuantity) || qbQuantity <= 0}
                   onClick={async () => {
                     await handleQuickTrade("BUY");
                   }}
@@ -878,6 +888,23 @@ const Stocks = () => {
           </p>
           <DialogFooter>
             <Button className="w-full mt-4" onClick={() => setTradeDoneOpen(false)}>
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 에러 다이얼로그 */}
+      <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>알림</DialogTitle>
+          </DialogHeader>
+          <p className="text-center text-lg mt-2">
+            {errorMessage}
+          </p>
+          <DialogFooter>
+            <Button className="w-full mt-4" onClick={() => setErrorDialogOpen(false)}>
               확인
             </Button>
           </DialogFooter>
