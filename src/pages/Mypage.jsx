@@ -658,14 +658,20 @@ const MyPage = () => {
                     <Users className="w-8 h-8 text-gray-400" />
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">
-                    표시할 프로필이 없습니다
+                    {statusFilter === 'ended' && profiles.length > 0
+                      ? '종료된 프로필이 없습니다'
+                      : '표시할 프로필이 없습니다'}
                   </h3>
                   <p className="text-gray-400 mb-4">
-                    필터를 변경하거나 새로운 투자자 닉네임을 생성해보세요
+                    {statusFilter === 'ended' && profiles.length > 0
+                      ? '진행중 프로필만 있습니다. 필터를 변경해 보세요.'
+                      : '새로운 투자자 닉네임을 생성해보세요'}
                   </p>
-                  <button onClick={() => navigate('/character')} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
-                    닉네임 생성
-                  </button>
+                  {profiles.length === 0 && (
+                    <button onClick={() => navigate('/character')} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
+                      닉네임 생성
+                    </button>
+                  )}
                 </div>
               ) : null}
             </div>
