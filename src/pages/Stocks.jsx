@@ -290,16 +290,16 @@ const Stocks = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-white font-semibold text-lg">{priceText}</p>
-            <div className="flex items-center gap-1">
+          <div className="text-right w-28">
+            <p className="text-white font-semibold text-lg tabular-nums">{priceText}</p>
+            <div className="flex items-baseline gap-1">
               <p
-                className={`text-sm font-medium ${isUp ? "text-red-500" : "text-blue-500"}`}
+                className={`text-sm font-medium tabular-nums ${isUp ? "text-red-500" : "text-blue-500"}`}
               >
                 {changeText}
               </p>
               <p
-                className={`text-xs ${isUp ? "text-red-500" : "text-blue-500"}`}
+                className={`text-xs tabular-nums ${isUp ? "text-red-500" : "text-blue-500"}`}
               >
                 ({changePctText})
               </p>
@@ -697,16 +697,6 @@ const Stocks = () => {
                 </div>
               )}
 
-              {/* Redis 데이터 안내 */}
-              <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-                <div className="flex items-center gap-2 text-blue-400 text-sm">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>
-                    Redis 데이터: 백그라운드 스케줄러가 20분마다 자동 갱신하는
-                    주식 데이터 | 갱신 없이 읽기만
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
         ) : (

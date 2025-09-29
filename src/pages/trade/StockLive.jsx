@@ -388,23 +388,30 @@ export default function StockLive() {
         </div>
       </div>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div className="row" style={{ gap: 12 }}>
-          <span className="muted">현재가</span>
-          <strong>
-            {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
-          </strong>
-          <span className="muted">전일대비</span>
-          <span style={{ color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350" }}>
-            {Number.isFinite(Number(change))
-              ? `${change.toFixed(2)} (${Number(changePct).toFixed(2)}%)`
-              : "-"}
-          </span>
+        <div className="row" style={{ gap: 8, alignItems: 'baseline', flexWrap: 'nowrap', width: '100%' }}>
+          <div className="row" style={{ gap: 12, alignItems: 'baseline', minWidth: 0, overflow: 'hidden', flex: '1 1 auto' }}>
+            <div className="row" style={{ gap: 6, alignItems: 'baseline', whiteSpace: 'nowrap' }}>
+              <span className="muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>현재가</span>
+              <strong className="tabular-nums" style={{ whiteSpace: 'nowrap', fontSize: 'clamp(14px, 4.5vw, 18px)' }}>
+              {Number.isFinite(Number(price)) ? Number(price).toFixed(2) : "-"}
+            </strong>
+            </div>
+            <div className="row" style={{ gap: 6, alignItems: 'baseline', whiteSpace: 'nowrap' }}>
+              <span className="muted" style={{ whiteSpace: 'nowrap', fontSize: 12 }}>전일대비</span>
+              <span className="tabular-nums" style={{ color: (change ?? 0) >= 0 ? "#26a69a" : "#ef5350", whiteSpace: 'nowrap', fontSize: 'clamp(12px, 3.8vw, 16px)' }}>
+              {Number.isFinite(Number(change))
+                ? `${change.toFixed(2)} (${Number(changePct).toFixed(2)}%)`
+                : "-"}
+            </span>
+            </div>
+          </div>
           {err && <span className="muted">{err}</span>}
           <div style={{ flex: 1 }} />
           <button
             onClick={() => setShowGuide(true)}
             title="지표 가이드"
             className="px-2.5 py-1.5 text-xs rounded-md border border-slate-600 bg-slate-800 hover:bg-slate-700 text-white inline-flex items-center gap-1.5"
+            style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
           >
             <HelpCircle size={14} />
             <span>지표 가이드</span>
