@@ -32,6 +32,13 @@ export default function StockLive() {
   // 매수/매도 로직
   const handleUpdateStockAmount = async (type, quantity) => {
     try {
+      // 0주 거래 방지
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        setErrorMessage("수량을 1 이상 입력하세요");
+        setErrorDialogOpen(true);
+        return;
+      }
+
       const isoDate =
         currentDate instanceof Date
           ? currentDate.toISOString().slice(0, 10)
@@ -65,6 +72,15 @@ export default function StockLive() {
       } else {
         setTrade("매도");
       }
+      // 현금 변화량 로컬 누적 저장 (모달/요약 표시용)
+      try {
+        const delta = (Number(price) || 0) * (Number(quantity) || 0);
+        const signed = type === "BUY" ? -delta : delta;
+        const keyCash = `cashDelta:${isoDate}`;
+        const prevCash = Number(JSON.parse(localStorage.getItem(keyCash) || "0"));
+        const nextCash = prevCash + signed;
+        localStorage.setItem(keyCash, JSON.stringify(nextCash));
+      } catch (_) {}
       setExecutedQty(quantity); // ✅ 거래된 수량 저장
       setQuantity(0);
       setShowModal(true);
@@ -131,6 +147,10 @@ export default function StockLive() {
 
   const [showModal, setShowModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  // const [guideTab, setGuideTab] = useState('ma');
+  // 에러 다이얼로그 상태
+  const [errorDialogOpen, setErrorDialogOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [guideTab, setGuideTab] = useState('candle');
 
   const handleModalClosed = () => {
@@ -452,6 +472,7 @@ export default function StockLive() {
         <Button
           className="w-full h-full rounded-[0.8rem] text-[20px]"
           variant="destructive"
+          disabled={!Number.isFinite(quantity) || quantity <= 0}
           onClick={() => handleUpdateStockAmount("SELL", quantity)}
         >
           매도
@@ -459,6 +480,7 @@ export default function StockLive() {
         <Button
           className="w-full h-full rounded-[0.8rem] text-[20px]"
           variant="confirm"
+          disabled={!Number.isFinite(quantity) || quantity <= 0}
           onClick={() => handleUpdateStockAmount("BUY", quantity)}
         >
           매수
@@ -487,7 +509,7 @@ export default function StockLive() {
           <DialogHeader>
             <DialogTitle className="text-white">보조 지표 가이드</DialogTitle>
           </DialogHeader>
-          
+
           {/* 탭 네비게이션 */}
           <div className="flex space-x-1 bg-slate-900 rounded-lg p-1">
             {[
@@ -617,9 +639,26 @@ export default function StockLive() {
               </div>
             )}
           </div>
-          
+
           <DialogFooter>
             <Button className="w-full bg-slate-700 hover:bg-slate-600 text-white" onClick={() => setShowGuide(false)}>닫기</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 에러 다이얼로그 */}
+      <Dialog open={errorDialogOpen} onOpenChange={setErrorDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>알림</DialogTitle>
+          </DialogHeader>
+          <p className="text-center text-lg mt-2">
+            {errorMessage}
+          </p>
+          <DialogFooter>
+            <Button className="w-full mt-4" onClick={() => setErrorDialogOpen(false)}>
+              확인
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -6,6 +6,7 @@ import useDateStore from "../store/useDateStore";
 import useLoginStore from "../store/useLoginStore";
 import axios from "../util/axiosInstance";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 
 export default function BatchBuy() {
   const navigate = useNavigate();
@@ -45,6 +46,10 @@ export default function BatchBuy() {
   const [cancelRequested, setCancelRequested] = useState(false);
   const [errors, setErrors] = useState([]); // [{symbol, message}]
   const abortRef = useRef(null);
+  
+  // 완료 다이얼로그 상태
+  const [completionDialogOpen, setCompletionDialogOpen] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState("");
   
   // 과거 모드 데이터 (Stocks.jsx와 동일)
   const [histMap, setHistMap] = useState({});
@@ -145,7 +150,8 @@ export default function BatchBuy() {
           : currentDate;
       const valid = cart.filter((c) => (c.qty || 0) > 0);
       if (valid.length === 0) {
-        alert("장바구니에 수량이 1 이상인 종목을 추가해주세요");
+        setCompletionMessage("장바구니에 수량이 1 이상인 종목을 추가해주세요");
+        setCompletionDialogOpen(true);
         return;
       }
 
@@ -225,12 +231,13 @@ export default function BatchBuy() {
 
       setIsProcessing(false);
       if (!cancelRequested) {
-        alert("일괄 매수가 완료되었습니다.");
-        navigate(-1);
+        setCompletionMessage("일괄 매수가 완료되었습니다.");
+        setCompletionDialogOpen(true);
       }
     } catch (e) {
       console.error(e);
-      alert("일괄 매수에 실패했습니다. 다시 시도해주세요.");
+      setCompletionMessage("일괄 매수에 실패했습니다. 다시 시도해주세요.");
+      setCompletionDialogOpen(true);
     }
   };
 
@@ -441,6 +448,31 @@ export default function BatchBuy() {
           </div>
         </div>
       )}
+
+      {/* 완료 다이얼로그 */}
+      <Dialog open={completionDialogOpen} onOpenChange={setCompletionDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>알림</DialogTitle>
+          </DialogHeader>
+          <p className="text-center text-lg mt-2">
+            {completionMessage}
+          </p>
+          <DialogFooter>
+            <Button 
+              className="w-full mt-4" 
+              onClick={() => {
+                setCompletionDialogOpen(false);
+                if (completionMessage.includes("완료되었습니다")) {
+                  navigate(-1);
+                }
+              }}
+            >
+              확인
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
