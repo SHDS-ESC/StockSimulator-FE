@@ -1390,70 +1390,8 @@ const Chat = () => {
                 </div>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* AI 인사이트 */}
-        <div className="bg-slate-800 rounded-2xl p-4 shadow-sm">
-          <h3 className="font-semibold text-white mb-3 text-sm">
-            💡 AI 투자 인사이트
-          </h3>
-          <div className="space-y-3">
-            {simulation.result?.investmentAnalysis ? (
-              <>
-                <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
-                  <h4 className="font-medium text-purple-300 mb-1 text-sm">
-                    {simulation.result.investmentAnalysis.recommendation ||
-                      "투자 추천"}
-                  </h4>
-                  <p className="text-xs text-purple-200">
-                    {simulation.result.investmentAnalysis.action ||
-                      "기술주 비중 조정, 헬스케어 분산투자 고려"}
-                  </p>
-                  {simulation.result.investmentAnalysis.confidence && (
-                    <p className="text-xs text-purple-300 mt-1">
-                      신뢰도: {simulation.result.investmentAnalysis.confidence}
-                    </p>
-                  )}
-                </div>
-                <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
-                  <h4 className="font-medium text-green-300 mb-1 text-sm">
-                    성과 분석
-                  </h4>
-                  <p className="text-xs text-green-200">
-                    최근 30일 단타 성과 우수, 현재 전략 유지 권장
-                  </p>
-                  {simulation.result.investmentAnalysis.score && (
-                    <p className="text-xs text-green-300 mt-1">
-                      AI 점수: {simulation.result.investmentAnalysis.score}/
-                      {simulation.result.investmentAnalysis.maxScore || 100}
-                    </p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
-                  <h4 className="font-medium text-purple-300 mb-1 text-sm">
-                    이번 주 추천
-                  </h4>
-                  <p className="text-xs text-purple-200">
-                    기술주 비중 조정, 헬스케어 분산투자 고려
-                  </p>
-                </div>
-                <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
-                  <h4 className="font-medium text-green-300 mb-1 text-sm">
-                    성과 분석
-                  </h4>
-                  <p className="text-xs text-green-200">
-                    최근 30일 단타 성과 우수, 현재 전략 유지 권장
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* 포트폴리오 탭 */}
-            {activeTab === "portfolio" && (
+{activeTab === "portfolio" && (
               <div className="space-y-4">
                 {/* 포트폴리오 탭 선택 */}
                 <div className="bg-slate-700 rounded-xl p-4 border border-slate-600">
@@ -1872,6 +1810,70 @@ const Chat = () => {
                 )}
               </div>
             )}
+            
+          </div>
+        </div>
+
+        {/* AI 인사이트 */}
+        <div className="bg-slate-800 rounded-2xl p-4 shadow-sm">
+          <h3 className="font-semibold text-white mb-3 text-sm">
+            💡 AI 투자 인사이트
+          </h3>
+          <div className="space-y-3">
+            {simulation.result?.investmentAnalysis ? (
+              <>
+                <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
+                  <h4 className="font-medium text-purple-300 mb-1 text-sm">
+                    {simulation.result.investmentAnalysis.recommendation ||
+                      "투자 추천"}
+                  </h4>
+                  <p className="text-xs text-purple-200">
+                    {simulation.result.investmentAnalysis.action ||
+                      "기술주 비중 조정, 헬스케어 분산투자 고려"}
+                  </p>
+                  {simulation.result.investmentAnalysis.confidence && (
+                    <p className="text-xs text-purple-300 mt-1">
+                      신뢰도: {simulation.result.investmentAnalysis.confidence}
+                    </p>
+                  )}
+                </div>
+                <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
+                  <h4 className="font-medium text-green-300 mb-1 text-sm">
+                    성과 분석
+                  </h4>
+                  <p className="text-xs text-green-200">
+                    최근 30일 단타 성과 우수, 현재 전략 유지 권장
+                  </p>
+                  {simulation.result.investmentAnalysis.score && (
+                    <p className="text-xs text-green-300 mt-1">
+                      AI 점수: {simulation.result.investmentAnalysis.score}/
+                      {simulation.result.investmentAnalysis.maxScore || 100}
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-3 bg-gradient-to-r from-purple-500 bg-opacity-10 to-blue-500 bg-opacity-10 rounded-xl border border-purple-500 border-opacity-30">
+                  <h4 className="font-medium text-purple-300 mb-1 text-sm">
+                    이번 주 추천
+                  </h4>
+                  <p className="text-xs text-purple-200">
+                    기술주 비중 조정, 헬스케어 분산투자 고려
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-green-500 bg-opacity-10 to-emerald-500 bg-opacity-10 rounded-xl border border-green-500 border-opacity-30">
+                  <h4 className="font-medium text-green-300 mb-1 text-sm">
+                    성과 분석
+                  </h4>
+                  <p className="text-xs text-green-200">
+                    최근 30일 단타 성과 우수, 현재 전략 유지 권장
+                  </p>
+                </div>
+              </>
+            )}
+
+
           </div>
         </div>
       </div>
