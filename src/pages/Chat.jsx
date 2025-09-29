@@ -231,7 +231,7 @@ const PortfolioChart = ({ portfolioData = [] }) => {
               className="w-4 h-1 rounded-full" 
               style={{ backgroundColor: colors[index % colors.length] }}
             ></div>
-            <span className="text-slate-200 font-medium">{portfolio.id || `Portfolio ${index + 1}`}</span>
+            <span className="text-slate-200 font-medium">{portfolio.name || portfolio.id || `Portfolio ${index + 1}`}</span>
           </div>
         ))}
       </div>
@@ -477,8 +477,8 @@ const Chat = () => {
   const [simulation, setSimulation] = useState({
     ticker: "AAPL",
     baseDate: formatDateKey(currentDate || new Date()),
-    trainDays: 110,
-    predictSteps: 10, // 3일 -> 10일로 늘려서 더 많은 데이터 포인트 받기
+    trainDays: 250,
+    predictSteps: 10,
     loading: false,
     result: null,
     error: null,
@@ -522,6 +522,8 @@ const Chat = () => {
   // 종목 검색 모달 상태 관리
   const [isStockSearchModalOpen, setIsStockSearchModalOpen] = useState(false);
   const [currentPortfolioIndex, setCurrentPortfolioIndex] = useState(null);
+  // 시뮬레이션용 종목 선택 여부
+  const [isSelectingSimulation, setIsSelectingSimulation] = useState(false);
   
   
   // 보유 주식 불러오기
@@ -717,11 +719,25 @@ const Chat = () => {
       };
 
       const response = await axiosInstance.post('/agent/portfolio/cumulative-returns', requestData);
-      
+
+      // 응답 시리즈에 name 주입 (백엔드가 name을 반환하지 않는 경우 대비)
+      const injected = (() => {
+        const res = response && response.data ? { ...response.data } : {};
+        const reqSeries = requestData.portfolios || [];
+        const resSeries = Array.isArray(res.series) ? res.series : [];
+        if (resSeries.length && reqSeries.length) {
+          res.series = resSeries.map((s, i) => ({
+            ...s,
+            name: s.name || (reqSeries[i] && reqSeries[i].name) || s.id || `Portfolio ${i + 1}`,
+          }));
+        }
+        return res;
+      })();
+
       setPortfolio(prev => ({
         ...prev, 
         loading: false, 
-        result: response.data,
+        result: injected,
         error: null
       }));
     } catch (error) {
@@ -772,6 +788,13 @@ const Chat = () => {
 
   // 종목 선택 핸들러 (모달에서 종목 선택 시)
   const handleStockSelect = (stock) => {
+    // 시뮬레이션 티커 선택 모드
+    if (isSelectingSimulation) {
+      handleSimulationChange("ticker", (stock?.ticker || "").toUpperCase());
+      setIsSelectingSimulation(false);
+      return;
+    }
+
     if (currentPortfolioIndex === null) return;
     
     setPortfolio(prev => ({
@@ -840,7 +863,7 @@ const Chat = () => {
   const addPortfolio = () => {
     const newPortfolio = {
       id: `portfolio_${Date.now()}`,
-      name: `포트폴리오 ${portfolio.portfolios.length + 1}`,
+      name: `새 포트폴리오 ${portfolio.portfolios.length + 1}`,
       tickers: [],
       weights: []
     };
@@ -899,7 +922,7 @@ const Chat = () => {
           const normalizedWeights = sum > 0 ? p.weights.map(w => w / sum) : p.weights;
           return {
             id: p.id,
-            name: p.name,
+            name: p.name || `포트폴리오 ${portfolio.portfolios.indexOf(p) + 1}`, // name이 없으면 기본값 사용
             tickers: p.tickers.filter(t => t.trim() !== ''), // 빈 종목 제거
             weights: normalizedWeights
           };
@@ -908,10 +931,24 @@ const Chat = () => {
 
       const response = await axiosInstance.post('/agent/portfolio/cumulative-returns', requestData);
       
+      // 응답 시리즈에 name 주입 (백엔드가 name을 반환하지 않는 경우 대비)
+      const injected = (() => {
+        const res = response && response.data ? { ...response.data } : {};
+        const reqSeries = requestData.portfolios || [];
+        const resSeries = Array.isArray(res.series) ? res.series : [];
+        if (resSeries.length && reqSeries.length) {
+          res.series = resSeries.map((s, i) => ({
+            ...s,
+            name: s.name || (reqSeries[i] && reqSeries[i].name) || s.id || `Portfolio ${i + 1}`,
+          }));
+        }
+        return res;
+      })();
+      
       setPortfolio(prev => ({
         ...prev, 
         loading: false, 
-        result: response.data,
+        result: injected,
         error: null
       }));
     } catch (error) {
@@ -1208,29 +1245,38 @@ const Chat = () => {
                     🎮 AI 주식 예측 시뮬레이션
                   </h3>
                   <div className="space-y-3">
-                    {/* 티커 입력 */}
+                    {/* 티커 입력 (StockSearchModal 사용) */}
                     <div>
                       <label className="block text-xs text-gray-300 mb-1">
                         티커 심볼
                       </label>
-                      <input
-                        type="text"
-                        value={simulation.ticker}
-                        onChange={(e) =>
-                          handleSimulationChange(
-                            "ticker",
-                            e.target.value.toUpperCase()
-                          )
-                        }
-                        placeholder="예: AAPL"
-                        className="w-full px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-gray-400"
-                      />
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="text"
+                          value={simulation.ticker}
+                          onChange={(e) =>
+                            handleSimulationChange(
+                              "ticker",
+                              e.target.value.toUpperCase()
+                            )
+                          }
+                          placeholder="예: AAPL"
+                          className="flex-1 px-3 py-2 text-sm border border-slate-600 rounded-lg bg-slate-700 text-white placeholder-gray-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { setIsSelectingSimulation(true); setIsStockSearchModalOpen(true); }}
+                          className="px-3 py-2 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                        >
+                          검색
+                        </button>
+                      </div>
                     </div>
 
                     {/* baseDate (사용자 선택 가능) */}
                     <div>
                       <label className="block text-xs text-gray-300 mb-1">
-                        baseDate
+                        기준 날짜
                       </label>
                       <input
                         type="date"
@@ -1633,8 +1679,8 @@ const Chat = () => {
                                   type="text"
                                   value={p.name || ''}
                                   onChange={(e) => handlePortfolioItemChange(index, 'name', e.target.value)}
-                                    className="bg-transparent text-sm font-medium text-white border-none outline-none focus:bg-slate-500 focus:px-2 focus:py-1 focus:rounded transition-all"
-                                  placeholder="포트폴리오 이름"
+                                  className="w-full px-3 py-2 text-sm bg-slate-500 border border-slate-400 rounded text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none focus:bg-slate-600 transition-all"
+                                  placeholder="포트폴리오 이름을 입력하세요"
                                 />
                               </div>
                               <div className="flex items-center space-x-1">
@@ -1780,7 +1826,7 @@ const Chat = () => {
                                   className="w-3 h-3 rounded-full" 
                                   style={{ backgroundColor: colors[index % colors.length] }}
                                 ></div>
-                                <h4 className="font-medium text-white text-sm">{portfolioData.id || `Portfolio ${index + 1}`}</h4>
+                                <h4 className="font-medium text-white text-sm">{portfolioData.name || portfolioData.id || `Portfolio ${index + 1}`}</h4>
                               </div>
                               
                               {lastData && (
@@ -2673,12 +2719,14 @@ const Chat = () => {
       {/* 종목 검색 모달 */}
       <StockSearchModal
         isOpen={isStockSearchModalOpen}
-        onClose={() => setIsStockSearchModalOpen(false)}
-        onSelectStock={handleStockSelect}
+        onClose={() => { setIsSelectingSimulation(false); setIsStockSearchModalOpen(false); }}
+        onSelectStock={(stock) => { handleStockSelect(stock); setIsStockSearchModalOpen(false); }}
         currentTickers={
-          currentPortfolioIndex !== null && portfolio.portfolios[currentPortfolioIndex]
-            ? portfolio.portfolios[currentPortfolioIndex].tickers || []
-            : []
+          isSelectingSimulation
+            ? []
+            : (currentPortfolioIndex !== null && portfolio.portfolios[currentPortfolioIndex]
+                ? portfolio.portfolios[currentPortfolioIndex].tickers || []
+                : [])
         }
       />
     </div>
