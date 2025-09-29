@@ -13,6 +13,7 @@ import useTimeLineStore from "@/store/useTimeLineStore";
 import axiosInstance from "@/util/axiosInstance";
 import useLoginStore from "@/store/useLoginStore";
 import useConfirmLogin from "../hooks/useConfirmLogin";
+import { toast } from "sonner";
 
 const Character = () => {
   useConfirmLogin(null);
@@ -121,12 +122,19 @@ const Character = () => {
     setIsDetailModalOpen(false);
   };
 
-  const handleCreateProfile = () => {
-    if (newProfile.nickname.trim()) {
-      createUserProfile(newProfile);
-      // 성공 후 홈페이지로 이동
-      alert("프로필이 생성되었습니다!");
+  const handleCreateProfile = async () => {
+    if (!newProfile.nickname.trim()) return;
+    try {
+      const created = await createUserProfile(newProfile);
+      toast.success("프로필이 생성되었습니다!", {
+        description: `${newProfile.nickname} 님의 모의 투자가 시작됩니다.`,
+        duration: 2500,
+      });
       navigate("/home");
+    } catch (e) {
+      toast.error("프로필 생성에 실패했습니다.", {
+        description: "잠시 후 다시 시도해주세요.",
+      });
     }
   };
 
