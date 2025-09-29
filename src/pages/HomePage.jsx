@@ -467,6 +467,11 @@ const HomePage = () => {
     try {
       const list = await fetchProfiles();
       const totalCurrentPrice = await fetchStocks();
+      // 프로필이 하나도 없으면 캐릭터 생성 화면으로 이동
+      if (!Array.isArray(list) || list.length === 0) {
+        navigate("/character");
+        return;
+      }
       // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
       if (lastProfileId && Number(lastProfileId) > 0) {
         try {

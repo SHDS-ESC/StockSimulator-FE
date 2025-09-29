@@ -663,7 +663,7 @@ const MyPage = () => {
                   <p className="text-gray-400 mb-4">
                     필터를 변경하거나 새로운 투자자 닉네임을 생성해보세요
                   </p>
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
+                  <button onClick={() => navigate('/character')} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors">
                     닉네임 생성
                   </button>
                 </div>
