@@ -21,6 +21,7 @@ import {
 import { useCallback } from "react";
 import useRegisterStore from "@/store/useRegisterStore";
 import axios from "axios";
+import axiosInstance from "@/util/axiosInstance";
 
 const interests = [
   { value: "light", label: "Light" },
@@ -90,8 +91,7 @@ const Register = () => {
 
     setError("");
     try {
-      axios.defaults.baseURL = import.meta.env.VITE_API_BASE_URL;
-      const response = await axios.post("/api/user/register", {
+      const response = await axiosInstance.post("/user/register", {
         email,
         password,
         level,
