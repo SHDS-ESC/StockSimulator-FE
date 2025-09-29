@@ -15,7 +15,7 @@ import RedisTest from "./pages/RedisTest";
 import Chat from "./pages/Chat";
 import BatchBuy from "./pages/BatchBuy";
 import useDateStore from "@/store/useDateStore";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import useScrollLock from "@/hooks/useScrollLock";
 import axiosInstance from "./util/axiosInstance";
 // CalendarForm 관련 imports
@@ -313,6 +313,60 @@ function App() {
     return date.toISOString().split("T")[0];
   };
 
+  // 항목 합계 기준 변동치 집계 (리스트의 changeAmount/Rate처럼 표시용)
+  const aggregatedDelta = useMemo(() => {
+    const sumChangeAmount = Array.isArray(todayOfferData)
+      ? todayOfferData.reduce((acc, cur) => {
+          const qty = parseNumericValue(cur?.quantity);
+          const chg = parseNumericValue(cur?.changeAmount);
+          return acc + qty * chg;
+        }, 0)
+      : 0;
+
+    const investedNow = parseNumericValue(todayProfile?.totalInvested);
+    const assetsNow = parseNumericValue(todayProfile?.totalAssets);
+    // 현금 변화량: 당일 거래 누적값을 로컬에서 읽기
+    let cashChangeAmount = 0;
+    try {
+      const key = `cashDelta:${formatDate(currentDate)}`;
+      cashChangeAmount = parseNumericValue(JSON.parse(localStorage.getItem(key) || "0"));
+    } catch (_) {
+      cashChangeAmount = 0;
+    }
+
+    const investedPrev = investedNow - sumChangeAmount;
+    const assetsPrev = assetsNow - sumChangeAmount;
+    const cashNow = parseNumericValue(todayProfile?.cashBalance) + cashChangeAmount;
+    const cashPrev = cashNow - cashChangeAmount;
+
+    const investedPercent = investedPrev > 0 ? (sumChangeAmount / investedPrev) * 100 : 0;
+    const assetsPercent = assetsPrev > 0 ? (sumChangeAmount / assetsPrev) * 100 : 0;
+    const cashPercent = cashPrev > 0 ? (cashChangeAmount / cashPrev) * 100 : 0;
+
+    return {
+      totalAssetsChangeAmount: sumChangeAmount,
+      totalAssetsPercent: assetsPercent,
+      investedChangeAmount: sumChangeAmount,
+      investedPercent: investedPercent,
+      cashChangeAmount,
+      cashPercent,
+    };
+  }, [todayOfferData, todayProfile]);
+
+  // 변동이 반영된 표시용 합계 금액
+  const computedTotals = useMemo(() => {
+    const investedBase = parseNumericValue(todayProfile?.totalInvested);
+    const assetsBase = parseNumericValue(todayProfile?.totalAssets);
+    const cashBase = parseNumericValue(todayProfile?.cashBalance);
+    const investedNow = investedBase + aggregatedDelta.investedChangeAmount;
+    const assetsNow = assetsBase + aggregatedDelta.totalAssetsChangeAmount;
+    return {
+      totalInvested: investedNow,
+      totalAssets: assetsNow,
+      cashBalance: cashBase + aggregatedDelta.cashChangeAmount,
+    };
+  }, [todayProfile, aggregatedDelta]);
+
   // const fetchTodayOfferData = async () => {
   //   try {
   //     const response = await axiosInstance.post(
@@ -470,16 +524,10 @@ useEffect(() => {
                     <div className="flex justify-between">
                       <span className="font-semibold">총 자산</span>
                       <div className="flex flex-col text-end">
-                        <div className="font-bold">
-                          {formatCurrencyValue(todayProfile.totalAssets)}
-                        </div>
-                        <div
-                          className={getColorClass(
-                            parseNumericValue(todayProfile.changeRate)
-                          )}
-                        >
-                          ({formatPercentage(todayProfile.changeRate)})
-                        </div>
+                        <div className="font-bold">{formatCurrencyValue(computedTotals.totalAssets)}</div>
+                        <p className={`text-xs ${getColorClass(aggregatedDelta.totalAssetsChangeAmount)}`}>
+                          {formatCurrency(aggregatedDelta.totalAssetsChangeAmount)} ({formatPercentage(aggregatedDelta.totalAssetsPercent)})
+                        </p>
                       </div>
                     </div>
 
@@ -487,18 +535,10 @@ useEffect(() => {
                     <div className="flex justify-between">
                       <span className="font-semibold">투자금</span>
                       <div className="flex flex-col text-end">
-                        <span
-                          className={`font-bold `}
-                        >
-                         $ {todayProfile.totalInvested}
-                        </span>
-                        <div
-                          className={getColorClass(
-                            parseNumericValue(todayProfile.changeRate)
-                          )}
-                        >
-                          ({formatPercentage(todayProfile.changeRate)})
-                        </div>
+                        <div className="font-bold">{formatCurrencyValue(computedTotals.totalInvested)}</div>
+                        <p className={`text-xs ${getColorClass(aggregatedDelta.investedChangeAmount)}`}>
+                          {formatCurrency(aggregatedDelta.investedChangeAmount)} ({formatPercentage(aggregatedDelta.investedPercent)})
+                        </p>
                       </div>
                     </div>
 
@@ -506,9 +546,10 @@ useEffect(() => {
                     <div className="flex justify-between">
                       <span className="font-semibold">보유 현금</span>
                       <div className="flex flex-col text-end">
-                        <span className="font-bold">
-                          {formatCurrencyValue(todayProfile?.cashBalance || 0)}
-                        </span>
+                        <span className="font-bold">{formatCurrencyValue(computedTotals?.cashBalance || 0)}</span>
+                        <p className={`text-xs ${getColorClass(aggregatedDelta.cashChangeAmount)}`}>
+                          {formatCurrency(aggregatedDelta.cashChangeAmount)} ({formatPercentage(aggregatedDelta.cashPercent)})
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -545,7 +586,7 @@ useEffect(() => {
                             {todayOffer.quantity}주
                           </p>
                           <p className="text-white font-semibold text-sm">
-                            {formatCurrencyValue(todayOffer.changeAmount)}
+                            {formatCurrencyValue(todayOffer.currentPrice)}
                           </p>
                           <p
                             className={`text-xs ${getColorClass(
@@ -610,16 +651,10 @@ useEffect(() => {
                     <div className="flex justify-between">
                       <span className="font-semibold">총 자산</span>
                       <div className="flex flex-col text-end">
-                        <div className="font-bold">
-                          {formatCurrencyValue(todayProfile.totalAssets)}
-                        </div>
-                        <div
-                          className={getColorClass(
-                            parseNumericValue(todayProfile.changeRate)
-                          )}
-                        >
-                          ({formatPercentage(todayProfile.changeRate)})
-                        </div>
+                        <div className="font-bold">{formatCurrencyValue(computedTotals.totalAssets)}</div>
+                        <p className={`text-xs ${getColorClass(aggregatedDelta.totalAssetsChangeAmount)}`}>
+                          {formatCurrency(aggregatedDelta.totalAssetsChangeAmount)} ({formatPercentage(aggregatedDelta.totalAssetsPercent)})
+                        </p>
                       </div>
                     </div>
 
@@ -627,18 +662,10 @@ useEffect(() => {
                     <div className="flex justify-between">
                       <span className="font-semibold">투자금</span>
                       <div className="flex flex-col text-end">
-                        <span
-                          className={`font-bold `}
-                        >
-                          {formatCurrency(todayProfile.totalInvested)}
-                        </span>
-                        <div
-                          className={getColorClass(
-                            parseNumericValue(todayProfile.changeRate)
-                          )}
-                        >
-                          ({formatPercentage(todayProfile.changeRate)})
-                        </div>
+                        <div className="font-bold">{formatCurrencyValue(computedTotals.totalInvested)}</div>
+                        <p className={`text-xs ${getColorClass(aggregatedDelta.investedChangeAmount)}`}>
+                          {formatCurrency(aggregatedDelta.investedChangeAmount)} ({formatPercentage(aggregatedDelta.investedPercent)})
+                        </p>
                       </div>
                     </div>
 
@@ -646,9 +673,10 @@ useEffect(() => {
                     <div className="flex justify-between">
                       <span className="font-semibold">보유 현금</span>
                       <div className="flex flex-col text-end">
-                        <span className="font-bold">
-                          {formatCurrencyValue(todayProfile?.cashBalance || 0)}
-                        </span>
+                        <span className="font-bold">{formatCurrencyValue(computedTotals?.cashBalance || 0)}</span>
+                        <p className={`text-xs ${getColorClass(aggregatedDelta.cashChangeAmount)}`}>
+                          {formatCurrency(aggregatedDelta.cashChangeAmount)} ({formatPercentage(aggregatedDelta.cashPercent)})
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -685,7 +713,7 @@ useEffect(() => {
                             {todayOffer.quantity}주
                           </p>
                           <p className="text-white font-semibold text-sm">
-                            {formatCurrencyValue(todayOffer.changeAmount)}
+                            {formatCurrencyValue(todayOffer.currentPrice)}
                           </p>
                           <p
                             className={`text-xs ${getColorClass(
