@@ -133,7 +133,7 @@ const OrderHistory = () => {
     <div className="min-h-screen bg-slate-950">
       {/* 헤더 */}
       <div className="bg-slate-900 sticky top-0 z-50 border-b border-slate-700">
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <button
@@ -229,6 +229,9 @@ const OrderHistory = () => {
               const orderDate = order.date;
               const orderTime = order.time || "00:00:00";
               const totalAmount = order.totalAmount || 0;
+              const logoUrl = stockSymbol
+                ? `https://financialmodelingprep.com/image-stock/${stockSymbol}.png`
+                : null;
 
               return (
                 <div
@@ -237,8 +240,29 @@ const OrderHistory = () => {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-slate-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">
-                        {stockSymbol}
+                      <div className="w-10 h-10 bg-gray-100 rounded-[5px] flex items-center justify-center overflow-hidden">
+                        {logoUrl ? (
+                          <>
+                            <img
+                              src={logoUrl}
+                              alt={stockName}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const sibling =
+                                  e.currentTarget.nextElementSibling;
+                                if (sibling) sibling.classList.remove("hidden");
+                              }}
+                            />
+                            <span className="hidden text-gray-600 font-bold text-[10px] px-1">
+                              {stockSymbol}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-gray-600 font-bold text-[10px] px-1">
+                            {stockSymbol}
+                          </span>
+                        )}
                       </div>
                       <div>
                         <h3 className="text-white font-semibold text-sm">
