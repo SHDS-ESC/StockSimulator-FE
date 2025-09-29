@@ -33,6 +33,11 @@ const useChartStore = create(
 
     const updateChart = () => {
       const data = get().portfolioList;
+      const itemCount = Array.isArray(data) ? data.length : 0;
+      // 항목이 많을수록 파이를 약간 위로 올리고 반지름을 줄여 겹침 방지
+      const centerY = itemCount > 14 ? "40%" : itemCount > 10 ? "42%" : itemCount > 6 ? "44%" : "45%";
+      const outerR = itemCount > 14 ? "56%" : itemCount > 10 ? "58%" : "60%";
+
       myChart.setOption({
         title: {
           text: "포트폴리오",
@@ -47,17 +52,22 @@ const useChartStore = create(
           textStyle: { color: "#ffffff" },
         },
         legend: {
+          type: "scroll",
           orient: "horizontal",
-          bottom: "10px",
+          bottom: 6,
           left: "center",
+          padding: [0, 0, 6, 0],
+          itemGap: 10,
           textStyle: { color: "#ffffff", fontSize: 11 },
+          pageTextStyle: { color: "#ffffff" },
+          pageIconColor: "#ffffff",
         },
         series: [
           {
             name: "보유 종목",
             type: "pie",
-            radius: ["30%", "60%"],
-            center: ["50%", "45%"],
+            radius: ["30%", outerR],
+            center: ["50%", centerY],
             avoidLabelOverlap: false,
             label: { show: false },
             emphasis: {
