@@ -195,6 +195,8 @@ const PredictionChart = ({ historical = [], predictions = [] }) => {
           }
           return out;
         };
+        
+        // 백엔드에서 이미 필터링된 데이터를 사용
         const hist = dedup(
           (historical || []).filter(isValidPoint).sort(sortByTime)
         );
@@ -434,6 +436,7 @@ const Chat = () => {
       const response = await axiosInstance.post("/agent/predict", {
         ticker: simulation.ticker,
         today: baseDateStr, // API는 today 파라미터를 기대하므로 baseDate를 매핑
+        process_date: formatDateKey(currentDate || new Date()), // 현재 타임라인 날짜 추가
         trainDays: safeTrain,
         predictSteps: safeSteps,
       });

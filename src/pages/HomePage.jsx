@@ -293,7 +293,7 @@ const HomePage = () => {
       setHistError(null);
       try {
         const resp = await axiosInstance.get("/db/snapshot", {
-          params: { date: dateKey, page: 1, size: 3, sort: sortParam },
+          params: { date: dateKey, page: 1, size: 3, sort: sortParam, filterLowPrice: true },
         });
         const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
         setHistTop(rows);
