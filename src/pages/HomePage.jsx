@@ -659,7 +659,7 @@ const HomePage = () => {
                 ))}
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-hide pr-1">
                 {holdingStocks
                   .filter((stock) => stock.quantity && stock.quantity > 0)
                   .map((stock, index) => (
@@ -684,7 +684,7 @@ const HomePage = () => {
                             </span>
                           </div>
                           <div>
-                            <h4 className="text-white font-medium text-sm">
+                            <h4 className="text-white font-medium text-sm truncate max-w-[180px]">
                               {stock.name}
                             </h4>
                             <p className="text-gray-400 text-xs text-start">
