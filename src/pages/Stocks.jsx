@@ -127,6 +127,8 @@ const Stocks = () => {
 
   // 과거 모드 가격 캐시
   const [histMap, setHistMap] = useState({}); // symbol -> { price, change, changePercent }
+  // 실시간 상세 기준 동기화 맵 (symbol -> `/redis/stock/{symbol}` 응답)
+  const [rtDetailMap, setRtDetailMap] = useState({});
 
   // 날짜가 변경될 때마다 캐시 초기화
   useEffect(() => {
@@ -141,11 +143,17 @@ const Stocks = () => {
   };
 
   const handleStockSelect = (stock) => {
+    const sym = String(stock?.symbol || "").trim();
+    if (!sym) return;
     if (selectedFilter === "빠른 구매") {
       // 빠른구매 모드: 모달로 개별 구매
       setQuickBuyStock(stock);
       // 실시간 표기의 priceText("$123.45") 또는 과거 스냅샷의 숫자/문자 모두 처리
-      const priceNumber = parseFloat(String(stock?.price ?? stock?.priceText ?? "").replace(/[$,]/g, ""));
+      const rt = rtDetailMap?.[sym];
+      const rtPrice = rt ? parseFloat(String(rt?.price ?? "").replace(/[$,]/g, "")) : NaN;
+      const priceNumber = Number.isFinite(rtPrice)
+        ? rtPrice
+        : parseFloat(String(stock?.price ?? stock?.priceText ?? "").replace(/[$,]/g, ""));
       // stock 객체에 현재가 필드를 통일시켜 저장
       setQuickBuyStock((prev) => ({ ...prev, __currentPrice: Number.isFinite(priceNumber) ? priceNumber : null }));
       setQbQuantity(0);
@@ -153,7 +161,7 @@ const Stocks = () => {
       setQuickBuyOpen(true);
       return;
     }
-    navigate(`/stocks/${stock.symbol}`);
+    navigate(`/stocks/${encodeURIComponent(sym)}`);
   };
 
   const handleToggleFavorite = async (symbol) => {
@@ -239,9 +247,11 @@ const Stocks = () => {
       const isUp = changeText.startsWith("+");
       return { priceText, changeText, changePctText, isUp };
     }
-    // 실시간: 상세 페이지와 동일 계산식 적용
-    const cur = parseFloat(String(stock?.price ?? "").replace("$", ""));
-    const chg = parseFloat(String(stock?.change ?? "").replace("+", ""));
+    // 실시간: 상세 페이지(`/redis/stock/{symbol}`) 응답을 우선 사용해 동일 계산
+    const sym = String(stock?.symbol || "").toUpperCase();
+    const src = rtDetailMap?.[sym] ?? stock;
+    const cur = parseFloat(String(src?.price ?? "").replace("$", ""));
+    const chg = parseFloat(String(src?.change ?? "").replace("+", ""));
     const prev =
       Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
     const pct =
@@ -290,16 +300,16 @@ const Stocks = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-right w-28">
-            <p className="text-white font-semibold text-lg tabular-nums">{priceText}</p>
-            <div className="flex items-baseline gap-1">
+          <div className="text-right">
+            <p className="text-white font-semibold text-lg">{priceText}</p>
+            <div className="flex items-center gap-1">
               <p
-                className={`text-sm font-medium tabular-nums ${isUp ? "text-red-500" : "text-blue-500"}`}
+                className={`text-sm font-medium ${isUp ? "text-red-500" : "text-blue-500"}`}
               >
                 {changeText}
               </p>
               <p
-                className={`text-xs tabular-nums ${isUp ? "text-red-500" : "text-blue-500"}`}
+                className={`text-xs ${isUp ? "text-red-500" : "text-blue-500"}`}
               >
                 ({changePctText})
               </p>
@@ -403,6 +413,43 @@ const Stocks = () => {
     }
     return filteredStocks.length;
   }, [isHistorical, searchActive, filteredStocks.length, histMap.__total]);
+
+  // 실시간: 현재 화면에 보이는 심볼들 계산 (탐색/관심 모두 지원)
+  const visibleRealtimeSymbols = useMemo(() => {
+    if (isHistorical) return [];
+    if (activeTab === "관심") {
+      try {
+        const list = stocks.filter((s) => isInWatchlist(String(s?.symbol || "")));
+        return Array.from(new Set(list.map((s) => String(s?.symbol || "").toUpperCase()).filter(Boolean)));
+      } catch {
+        return [];
+      }
+    }
+    const list = currentStocks || [];
+    return Array.from(new Set(list.map((s) => String(s?.symbol || "").toUpperCase()).filter(Boolean)));
+  }, [isHistorical, activeTab, stocks, isInWatchlist, currentStocks]);
+
+  // 실시간: 상세 기준으로 5초 주기 재동기화
+  useEffect(() => {
+    if (isHistorical) { setRtDetailMap({}); return; }
+    const symbols = visibleRealtimeSymbols;
+    if (!symbols.length) return;
+    let alive = true;
+    const fetchDetails = async () => {
+      const entries = await Promise.all(symbols.map((sym) =>
+        axios.get(`/redis/stock/${sym}`).then((res) => [sym, res?.data || null]).catch(() => [sym, null])
+      ));
+      if (!alive) return;
+      setRtDetailMap((prev) => {
+        const next = { ...prev };
+        for (const [sym, data] of entries) { if (data) next[sym] = data; }
+        return next;
+      });
+    };
+    fetchDetails();
+    const timer = setInterval(fetchDetails, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [isHistorical, visibleRealtimeSymbols.join(",")]);
 
   // 과거 모드: 서버 스냅샷 로드
   // 검색 중에는 전체를 크게 받아온 다음(클라이언트 필터/페이지네이션),

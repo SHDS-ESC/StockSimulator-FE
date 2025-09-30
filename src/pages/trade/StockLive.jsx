@@ -265,34 +265,24 @@ export default function StockLive() {
       return;
     }
     if (isHistorical) {
-      // 과거 모드에서는 Redis를 호출하지 않음
       return () => { if (timer) clearInterval(timer); };
     }
     const fetchFromRedis = async () => {
       try {
         const res = await axiosInstance.get(`/redis/stock/${s}`);
         const data = res?.data;
-        if (!data) {
-          setErr("데이터 없음");
-          return;
-        }
+        if (!data) { setErr("데이터 없음"); return; }
         const cur = parseFloat(String(data.price || "").replace("$", ""));
         const chg = parseFloat(String(data.change || "").replace("+", ""));
         const prev = Number.isFinite(cur) && Number.isFinite(chg) ? cur - chg : null;
         setPrice(Number.isFinite(cur) ? cur : null);
         setPrevClose(Number.isFinite(prev) ? prev : null);
         setErr(null);
-      } catch (_) {
-        setErr("Redis에서 가격을 불러오지 못했습니다.");
-      }
+      } catch (_) { setErr("Redis에서 가격을 불러오지 못했습니다."); }
     };
-
     fetchFromRedis();
-
-    // 자동 갱신은 스케줄러에 맡김: 주기 요청 제거
-    return () => {
-      if (timer) clearInterval(timer);
-    };
+    timer = setInterval(fetchFromRedis, 5000);
+    return () => { if (timer) clearInterval(timer); };
   }, [s, isHistorical]);
   const handleDecrease = () => {
     setQuantity((prev) => Math.max(0, prev - 1));
