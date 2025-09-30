@@ -718,7 +718,7 @@ const Chat = () => {
         }]
       };
 
-      const response = await axiosInstance.post('/agent/portfolio/cumulative-returns', requestData);
+      const response = await axiosInstance.post('/agent/portfolio/analysis', requestData);
 
       // 응답 시리즈에 name 주입 (백엔드가 name을 반환하지 않는 경우 대비)
       const injected = (() => {
@@ -929,7 +929,7 @@ const Chat = () => {
         })
       };
 
-      const response = await axiosInstance.post('/agent/portfolio/cumulative-returns', requestData);
+      const response = await axiosInstance.post('/agent/portfolio/analysis', requestData);
       
       // 응답 시리즈에 name 주입 (백엔드가 name을 반환하지 않는 경우 대비)
       const injected = (() => {
@@ -1808,8 +1808,53 @@ const Chat = () => {
                     
                     {/* 포트폴리오 차트 */}
                     <div className="mb-6">
+                      {/* 누적 수익률 (vs Benchmark) 차트 */}
+                      <div className="text-xs text-gray-300 mb-2">누적 수익률 (vs Benchmark)</div>
                       <PortfolioChart portfolioData={portfolio.result.series || []} />
                     </div>
+
+                    {/* KPI: 누적수익률, 최대낙폭, 변동성 */}
+                    {Array.isArray(portfolio.result.metrics) && portfolio.result.metrics.length > 0 && (
+                      <div className="mb-6">
+                        <div className="text-sm font-medium text-white mb-3">핵심 지표 (KPI)</div>
+                        <div className="grid grid-cols-1 gap-3">
+                          {portfolio.result.metrics.map((m, index) => {
+                            const colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981'];
+                            const seriesList = Array.isArray(portfolio.result.series) ? portfolio.result.series : [];
+                            const matched = seriesList.find(s => s.id === (m && m.id));
+                            const displayName = (matched && (matched.name || matched.id)) || (m && m.id) || `Portfolio ${index + 1}`;
+                            const metrics = m && m.metrics ? m.metrics : {};
+                            const toPct = (v) => (typeof v === 'number' && isFinite(v) ? `${(v * 100).toFixed(2)}%` : 'N/A');
+                            const toPctSigned = (v) => (typeof v === 'number' && isFinite(v) ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(2)}%` : 'N/A');
+                            const cumulative = metrics.cumulativeReturn;
+                            const mdd = metrics.maxDrawdown; // already negative
+                            const vol = metrics.volatilityAnnualized;
+                            return (
+                              <div key={m?.id || index} className="p-3 bg-slate-600 rounded-lg">
+                                <div className="flex items-center mb-3">
+                                  <div className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: colors[index % colors.length] }}></div>
+                                  <div className="text-white text-sm font-semibold">{displayName}</div>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                  <div className="bg-slate-500/40 rounded p-3 text-center">
+                                    <div className="text-gray-300 text-xs mb-1">누적 수익률</div>
+                                    <div className={`text-sm font-semibold ${typeof cumulative === 'number' && cumulative >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>{toPctSigned(cumulative)}</div>
+                                  </div>
+                                  <div className="bg-slate-500/40 rounded p-3 text-center">
+                                    <div className="text-gray-300 text-xs mb-1">최대낙폭</div>
+                                    <div className="text-sm font-semibold text-red-300">{toPct(mdd)}</div>
+                                  </div>
+                                  <div className="bg-slate-500/40 rounded p-3 text-center">
+                                    <div className="text-gray-300 text-xs mb-1">변동성(연간)</div>
+                                    <div className="text-sm font-semibold text-yellow-300">{toPct(vol)}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* 성과 요약 */}
                     {portfolio.result.series && (
