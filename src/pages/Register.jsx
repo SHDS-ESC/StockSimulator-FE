@@ -109,8 +109,9 @@ const Register = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col items-center justify-center">
-      <form onSubmit={handleRegister} className="w-full max-w-sm mx-auto">
+    <div className="text-white h-full flex flex-col items-center">
+      <div className="w-full h-56 sm:h-64 bg-[url('/logo.svg')] bg-no-repeat bg-top bg-[length:180px] sm:bg-[length:220px] md:bg-[length:260px]"></div>
+      <form onSubmit={handleRegister} className="w-full max-w-sm mx-auto mt-6">
         <Label htmlFor="email">아이디</Label>
         <Input
           id="email"
@@ -158,11 +159,6 @@ const Register = () => {
 
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="confirm" className="w-full mt-10">
-              {tickerList.length > 0
-                ? `${tickerList.length}개 선택됨`
-                : "관심 종목 선택"}
-            </Button>
           </PopoverTrigger>
           <PopoverContent align="start" sideOffset={4}>
             <Command>
