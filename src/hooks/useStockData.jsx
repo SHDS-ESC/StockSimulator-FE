@@ -1,23 +1,58 @@
-import { useState, useEffect } from "react";
-import {
-  profiles as mockProfiles,
-  stocks as mockStocks,
-} from "../util/mockData";
+import { useState, useEffect, useMemo } from "react";
+import axiosInstance from "../util/axiosInstance";
 
-// 나중에는 이 훅 안에서 실제 API(axios 등)를 호출하게 됩니다.
 export const useStockData = () => {
-  const [profiles, setProfiles] = useState([]);
-  const [stocks, setStocks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tickers, setTickers] = useState([]);
+  const [symbols, setSymbols] = useState([]);
+  const [query, setQuery] = useState("");
+  const [showPicker, setShowPicker] = useState(false);
 
+  // DB의 티커/심볼 목록 불러오기
   useEffect(() => {
-    // API 호출을 시뮬레이션합니다.
-    setTimeout(() => {
-      setProfiles(mockProfiles);
-      setStocks(mockStocks);
-      setLoading(false);
-    }, 500); // 0.5초 로딩
+    const load = async () => {
+      try {
+        const [tickersRes, watchRes] = await Promise.all([
+          axiosInstance.get("/db/tickers"),
+          axiosInstance.get("/watchlist", { params: { user: "guest" } })
+        ]);
+        const arr = Array.isArray(tickersRes?.data?.tickers) ? tickersRes.data.tickers : [];
+        setTickers(arr);
+      } catch (_) { /* ignore */ }
+    };
+    load();
   }, []);
 
-  return { profiles, stocks, loading };
+  // 팝업 오픈 시에만 심볼 메타(회사명/섹터/산업) 지연 로딩
+  useEffect(() => {
+    if (!showPicker || symbols.length) return;
+    (async () => {
+      try {
+        const sres = await axiosInstance.get("/db/symbols");
+        const sarr = Array.isArray(sres?.data?.symbols) ? sres.data.symbols : [];
+        setSymbols(sarr);
+      } catch (_) { /* ignore */ }
+    })();
+  }, [showPicker, symbols.length]);
+
+  const filteredTickers = useMemo(() => {
+    const q = String(query || "").trim().toUpperCase();
+    const base = symbols.length ? symbols : tickers.map(t => ({ ticker: t, name: t, sector: null, industry: null }));
+    const filt = !q ? base : base.filter(it => (
+      String(it.ticker).toUpperCase().includes(q)
+      || String(it.name || "").toUpperCase().includes(q)
+      || String(it.sector || "").toUpperCase().includes(q)
+      || String(it.industry || "").toUpperCase().includes(q)
+    ));
+    return filt; // 제한 제거
+  }, [tickers, symbols, query]);
+
+  return {
+    tickers,
+    symbols,
+    query,
+    setQuery,
+    showPicker,
+    setShowPicker,
+    filteredTickers
+  };
 };

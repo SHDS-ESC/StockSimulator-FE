@@ -4,7 +4,7 @@ import callToken from "../util/callToken";
 import { Input } from "@/components/ui/input";
 import { Button } from "../components/ui/button";
 import { Label } from "@/components/ui/label";
-
+import useConfirmLogin from "../hooks/useConfirmLogin";
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -12,23 +12,14 @@ const Login = () => {
   const navigate = useNavigate();
 
   // 페이지 로드 시 토큰 체크 → 로그인 상태면 홈으로 이동
-  useEffect(() => {
-    const accessToken = sessionStorage.getItem("accessToken");
-    console.log("accessToken", accessToken);
-
-    if (accessToken) {
-      console.log("이미 로그인된 상태입니다! 홈으로 이동합니다.");
-      alert("이미 로그인된 상태입니다! 홈으로 이동합니다.");
-      navigate("/"); // 홈 페이지로 이동
-    }
-  }, [navigate]);
+  useConfirmLogin("login");
 
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
       const token = await callToken(email, password);
       if (token) {
-        navigate("/"); // 로그인 성공 → 홈으로 이동
+        navigate("/home"); // 로그인 성공 → 홈으로 이동
       } else {
         setError("로그인 실패: 아이디 또는 비밀번호를 확인해주세요.");
       }
@@ -39,7 +30,7 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full bg-[url('/logo.svg')] bg-cover bg-center bg-no-repeat flex items-center justify-center p-4">
+    <div className="h-full w-full bg-[url('/logo.svg')] bg-cover bg-center bg-no-repeat flex items-center justify-center ps-4 pe-4">
       <div className="w-full max-w-md">
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2 mt-60">

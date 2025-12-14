@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { getNews } from "../api/NewsApi";
+import { getNewsByDate } from "../api/NewsApi";
+import useDateStore from "../store/useDateStore";
 
 const News = () => {
   const [selectedFilter, setSelectedFilter] = useState("최신순");
@@ -14,6 +15,7 @@ const News = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const { currentDate } = useDateStore();
 
   const handleNewsClick = (news) => {
     setSelectedNews(news);
@@ -24,36 +26,87 @@ const News = () => {
     setPage(newPage);
   };
 
+  const handlePreviousGroup = () => {
+    const pagesPerGroup = 5;
+    const currentGroup = Math.ceil(page / pagesPerGroup);
+    const newPage = Math.max(1, (currentGroup - 2) * pagesPerGroup + 1);
+    setPage(newPage);
+  };
+
+  const handleNextGroup = () => {
+    const pagesPerGroup = 5;
+    const currentGroup = Math.ceil(page / pagesPerGroup);
+    const newPage = Math.min(totalPages, currentGroup * pagesPerGroup + 1);
+    setPage(newPage);
+  };
+
   useEffect(() => {
     const fetchNews = async () => {
       try {
         setLoading(true);
-        const response = await getNews(page, size);
-        //페이지 정보 저장
-        setTotalPages(response.totalPage);
-        setTotalItems(response.dtoList.length);
-        //데이터 변환
-        const transformedData = response.dtoList.map((news) => ({
-          id: news.id,
-          symbol: news.ticker,
+        setError(null);
+
+        // currentDate가 없으면 기본 뉴스 조회
+        if (!currentDate) {
+          console.warn(
+            "[News] currentDate가 없습니다. 기본 뉴스를 조회합니다."
+          );
+          setNewsData([]);
+          setTotalPages(1);
+          setTotalItems(0);
+          return;
+        }
+
+        console.log("[News] 날짜별 뉴스 조회 시작:", {
+          currentDate,
+          page,
+          size,
+        });
+
+        // 날짜별 뉴스 조회
+        const response = await getNewsByDate(currentDate, page, size);
+
+        console.log("[News] 뉴스 응답 수신:", {
+          totalPage: response?.totalPage,
+          dtoListLength: response?.dtoList?.length,
+          raw: response,
+        });
+
+        // 페이지 정보 저장
+        setTotalPages(response.totalPage || 1);
+        setTotalItems(response.dtoList?.length || 0);
+
+        // 데이터 변환
+        const transformedData = (response.dtoList || []).map((news) => ({
+          id: news.newsId,
+          symbol: news.stockId,
           headline: news.title,
           source: news.source,
           timestamp: news.timePublished,
-          image: news.bannerImage || "기본이미지",
+          image: news.image || "기본이미지",
           summary: news.summary,
           url: news.url,
         }));
 
+        console.log("[News] 데이터 변환 완료:", {
+          transformedLength: transformedData.length,
+          sample: transformedData[0],
+        });
+
         setNewsData(transformedData);
       } catch (err) {
+        console.error("[News] 뉴스 조회 실패:", err);
         setError("뉴스 데이터를 불러오는데 실패했습니다.");
+        setNewsData([]);
+        setTotalPages(1);
+        setTotalItems(0);
       } finally {
         setLoading(false);
       }
     };
 
     fetchNews();
-  }, [page, size]);
+  }, [currentDate, page, size]);
 
   return (
     <div>
@@ -67,7 +120,7 @@ const News = () => {
         {/* 정렬 옵션 */}
         <div className="px-4 py-2">
           <div className="flex gap-2">
-            {["최신순", "인기순"].map((option) => (
+            {["최신순"].map((option) => (
               <button
                 key={option}
                 onClick={() => setSelectedFilter(option)}
@@ -117,7 +170,13 @@ const News = () => {
                       <div className="flex items-center gap-2 text-gray-500 text-xs">
                         <span>{news.source}</span>
                         <span>•</span>
-                        <span>{news.timestamp}</span>
+                        <span>
+                          {news.timestamp
+                            ? new Date(news.timestamp)
+                                .toISOString()
+                                .split("T")[0]
+                            : ""}
+                        </span>
                       </div>
                     </div>
                     <div className="w-16 h-16 rounded-lg overflow-hidden">
@@ -126,12 +185,36 @@ const News = () => {
                           src={news.image}
                           alt={news.headline}
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
                         />
-                      ) : (
-                        <div className="w-full h-full bg-gray-200 flex items-center justify-center text-xs text-gray-600 font-medium">
-                          {news.symbol}
-                        </div>
-                      )}
+                      ) : null}
+                      <div
+                        className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center"
+                        style={{
+                          display:
+                            news.image && news.image !== "기본이미지"
+                              ? "none"
+                              : "flex",
+                        }}
+                      >
+                        <svg
+                          className="w-8 h-8 text-white"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                          />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -142,34 +225,47 @@ const News = () => {
 
         {/* 페이지네이션 */}
         {!loading && !error && totalPages > 1 && (
-          <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 flex justify-center items-center gap-2 py-4 z-[60] bg-slate-900 rounded-lg px-4">
+          <div className="px-4 py-6 flex justify-center items-center gap-2">
             <button
-              onClick={() => handlePageChange(page - 1)}
-              disabled={page === 1}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-800 text-gray-400 hover:text-white"
+              onClick={handlePreviousGroup}
+              disabled={page <= 5}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-slate-800 text-gray-400 hover:text-white disabled:opacity-50"
             >
               이전
             </button>
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-              (pageNum) => (
-                <button
-                  key={pageNum}
-                  onClick={() => handlePageChange(pageNum)}
-                  className={`px-3 py-2 rounded ${
-                    page === pageNum
-                      ? "bg-white text-black"
-                      : "bg-slate-700 text-white"
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              )
-            )}
+            {(() => {
+              const pages = [];
+              const pagesPerGroup = 5;
+              const currentGroup = Math.ceil(page / pagesPerGroup);
+              const startPage = (currentGroup - 1) * pagesPerGroup + 1;
+              const endPage = Math.min(
+                currentGroup * pagesPerGroup,
+                totalPages
+              );
+
+              for (let i = startPage; i <= endPage; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => handlePageChange(i)}
+                    className={`px-3 py-2 rounded ${
+                      page === i
+                        ? "bg-white text-black"
+                        : "bg-slate-700 text-white"
+                    }`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+
+              return pages;
+            })()}
 
             <button
-              onClick={() => handlePageChange(page + 1)}
-              disabled={page === totalPages}
+              onClick={handleNextGroup}
+              disabled={page > totalPages - 5}
               className="px-3 py-2 bg-slate-700 text-white rounded disabled:opacity-50"
             >
               다음
@@ -200,25 +296,55 @@ const News = () => {
               </span>
               <span className="text-sm text-gray-600 ml-2">•</span>
               <span className="text-sm text-gray-600 ml-2">
-                {selectedNews?.timestamp}
+                {selectedNews?.timestamp
+                  ? new Date(selectedNews.timestamp).toISOString().split("T")[0]
+                  : ""}
               </span>
             </div>
 
             <div className="mb-4">
               <span className="text-sm font-semibold text-blue-600">
-                {selectedNews?.symbol}
+                {selectedNews?.title}
               </span>
             </div>
 
-            {selectedNews?.image && selectedNews?.image !== "기본이미지" && (
-              <div className="mb-4">
+            <div className="mb-4">
+              {selectedNews?.image && selectedNews?.image !== "기본이미지" ? (
                 <img
                   src={selectedNews?.image}
                   alt={selectedNews?.headline}
                   className="w-full h-48 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                    e.target.nextSibling.style.display = "flex";
+                  }}
                 />
+              ) : null}
+              <div
+                className="w-full h-48 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center"
+                style={{
+                  display:
+                    selectedNews?.image && selectedNews?.image !== "기본이미지"
+                      ? "none"
+                      : "flex",
+                }}
+              >
+                <svg
+                  className="w-16 h-16 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"
+                  />
+                </svg>
               </div>
-            )}
+            </div>
 
             <div className="mb-4">
               <p className="text-gray-700 leading-relaxed">

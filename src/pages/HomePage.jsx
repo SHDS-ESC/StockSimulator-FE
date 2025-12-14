@@ -1,376 +1,982 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, X, Heart, BarChart3, TrendingUp } from "lucide-react";
+import {
+  ChevronRight,
+  X,
+  Heart,
+  BarChart3,
+  TrendingUp,
+  LogIn,
+} from "lucide-react";
+import axiosInstance from "@/util/axiosInstance";
+import useLoginStore from "@/store/useLoginStore";
+import useConfirmLogin from "../hooks/useConfirmLogin";
+import useRealtimeStocks from "../hooks/useRealtimeStocks";
+import useDateStore from "@/store/useDateStore";
+
+// 유틸리티 함수들
+const formatCurrency = (value) => {
+  if (value === null || value === undefined || value === "" || value === "0")
+    return "$ 0";
+
+  const numValue =
+    typeof value === "string" ? parseFloat(value.replace(/[$,]/g, "")) : value;
+
+  if (!Number.isFinite(numValue)) return "$ 0";
+  
+  // 0.01 미만이면 0으로 처리 (+ - 없이)
+  if (Math.abs(numValue) < 0.01) return "$ 0";
+
+  const absValue = Math.abs(numValue);
+  const formatted = absValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+  });
+
+  return numValue < 0
+    ? `- ${formatted.replace("$", "$ ")}`
+    : `+${formatted.replace("$", "$ ")}`;
+};
+
+
+const formatCurrencyValue = (value) => {
+  if (value === null || value === undefined || value === "" || value === "0")
+    return "$ 0";
+
+  const numValue =
+    typeof value === "string" ? parseFloat(value.replace(/[$,]/g, "")) : value;
+
+  if (!Number.isFinite(numValue)) return "$ 0";
+
+  const absValue = Math.abs(numValue);
+  const formatted = absValue.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0, // 소수점 없애기
+  });
+
+  return formatted.replace("$", "$ ");
+};
+
+const formatPercentage = (value) => {
+  if (value === null || value === undefined || value === "") return "0.00%";
+  const numValue =
+    typeof value === "string" ? parseFloat(value.replace(/[+%]/g, "")) : value;
+  if (!Number.isFinite(numValue)) return "0.00%";
+  
+  // 0.01% 미만이면 0.00%로 처리 (+ - 없이)
+  if (Math.abs(numValue) < 0.01) return "0.00%";
+  
+  return `${numValue >= 0 ? "+" : ""}${numValue.toFixed(2)}%`;
+};
+
+// 거래량 포맷터 (안전 처리)
+const formatVolume = (value) => {
+  const n = typeof value === "number" ? value : parseFloat(String(value || "0").replace(/[^0-9.-]/g, ""));
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+  return n.toLocaleString("en-US");
+};
+
+
+const parseNumericValue = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
+  const cleaned = String(val).replace(/[^0-9.-]/g, "");
+  const n = parseFloat(cleaned);
+  if (!Number.isFinite(n)) return 0;
+  return Math.abs(n) < 1e-9 ? 0 : n;
+};
+
+const getColorClass = (value) => {
+  const n = typeof value === 'number' ? value : parseNumericValue(value);
+  if (!Number.isFinite(n) || Math.abs(n) < 1e-9) return "text-gray-400";
+  return n > 0 ? "text-red-500" : "text-blue-400";
+};
+
+// 금액과 퍼센트를 함께 판단해 0이면 회색, 양수 빨강, 음수 파랑
+const getDeltaClass = (amount, percent) => {
+  const a = parseNumericValue(amount);
+  const p = parseNumericValue(percent);
+  
+  // 문자열 상으로도 0%라면 회색
+  const percentStr = String(percent || "").replace(/\s/g, "");
+  const isZeroPercentText = /^(\+|−|-)?0(?:\.0+)?%?$/.test(percentStr);
+  
+  // 0.01% 미만은 모두 회색으로 처리
+  if (Math.abs(p) < 0.01 && Math.abs(a) < 0.01) {
+    return "text-gray-400";
+  }
+  
+  if (isZeroPercentText && Math.abs(a) < 1e-6) {
+    return "text-gray-400";
+  }
+  
+  // 부호 판정은 퍼센트 우선, 그다음 금액
+  if (p > 0 || (!Number.isFinite(p) && a > 0)) return "text-red-500";
+  if (p < 0 || (!Number.isFinite(p) && a < 0)) return "text-blue-400";
+  if (a > 0) return "text-red-500";
+  if (a < 0) return "text-blue-400";
+  
+  return "text-gray-400";
+};
+
+// Shimmer 스켈레톤 컴포넌트
+const ShimmerSkeleton = ({ className }) => (
+  <div className={`bg-slate-700 rounded ${className} relative overflow-hidden`}>
+    <div className="absolute inset-0">
+      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/15 to-transparent transform -translate-x-full animate-shimmer-sweep"></div>
+    </div>
+  </div>
+);
+
+// 커스텀 CSS 애니메이션을 위한 스타일
+const shimmerStyles = `
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer-sweep {
+  animation: shimmer-sweep 2s infinite ease-in-out;
+}
+`;
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const [holdingStocks, setHoldingStocks] = useState([]);
+  const { setCurrentDate } = useDateStore();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState("SSUNW");
-  // const [favoriteStocks, setFavoriteStocks] = useState(new Set());
-  const [profiles, setProfiles] = useState([
-    {
-      id: "SSUNW",
-      name: "SSUNW",
-      subtitle: "TimeLine : 실시간",
-      balance: "$4,776.24",
-      totalAssets: "$2,266.24",
-      totalInvested: "$2,500.00",
-    },
-    {
-      id: "TRADING_PRO",
-      name: "Trading Pro",
-      subtitle: "Advanced Strategy",
-      balance: "$8,432.17",
-      totalAssets: "$5,200.89",
-      totalInvested: "$3,231.28",
-    },
-    {
-      id: "CONSERVATIVE",
-      name: "Conservative",
-      subtitle: "Low Risk Portfolio",
-      balance: "$12,156.91",
-      totalAssets: "$7,890.45",
-      totalInvested: "$4,266.46",
-    },
-    {
-      id: "CRYPTO_FOCUS",
-      name: "Crypto Focus",
-      subtitle: "Digital Assets Only",
-      balance: "$3,892.15",
-      totalAssets: "$2,100.33",
-      totalInvested: "$1,791.82",
-    },
-    {
-      id: "DAY_TRADER",
-      name: "Day Trader",
-      subtitle: "Short-term Scalping",
-      balance: "$6,421.67",
-      totalAssets: "$3,888.90",
-      totalInvested: "$2,532.77",
-    },
-    {
-      id: "SWING_MASTER",
-      name: "Swing Master",
-      subtitle: "Medium-term Holdings",
-      balance: "$15,892.34",
-      totalAssets: "$9,455.12",
-      totalInvested: "$6,437.22",
-    },
+  const [profiles, setProfiles] = useState([]);
+  const { email, lastProfileId } = useLoginStore();
+  const [startInvested, setStartInvested] = useState(0);
+  const [selectedProfile, setSelectedProfile] = useState({
+    id: 0,
+    totalInvested: 0,
+    totalAssets: 0,
+    cashBalance: 0,
+    nickname: "프로필을 선택해주세요",
+    state: true,
+    change: 0,
+    changeAmount: 0,
+    seedMoney: 0,
+  });
+
+  // 실시간 주식 데이터 훅 사용
+  const {
+    stocks,
+    loading: stocksLoading,
+    error: stocksError,
+  } = useRealtimeStocks({ enabled: true });
+
+  // 타임라인 기반 과거 모드 여부 판별
+  const { currentDate } = useDateStore();
+  const isRealtime = useMemo(() => {
+    if (selectedProfile?.timelineId != null) {
+      return Number(selectedProfile.timelineId) === 9;
+    }
+    const name = String(selectedProfile?.name || "").toLowerCase();
+    const stateRealtime = selectedProfile?.state === true;
+    return stateRealtime || name.includes("실시간");
+  }, [
+    selectedProfile?.timelineId,
+    selectedProfile?.name,
+    selectedProfile?.state,
   ]);
 
-  const stocks = [
-    {
-      symbol: "AAPL",
-      name: "애플",
-      price: "$238.69",
-      change: "-0.2%",
-      changeAmount: "-$0.48",
-      logo: "🍎",
-    },
-    {
-      symbol: "MMM",
-      name: "3M",
-      price: "$155.30",
-      change: "-0.1%",
-      changeAmount: "-$0.16",
-      logo: "3️⃣",
-    },
-    {
-      symbol: "NFLX",
-      name: "넷플릭스",
-      price: "$1,243.82",
-      change: "+0.8%",
-      changeAmount: "+$9.87",
-      logo: "🎬",
-    },
-    {
-      symbol: "TSLA",
-      name: "테슬라",
-      price: "$245.67",
-      change: "+2.3%",
-      changeAmount: "+$5.52",
-      logo: "🚗",
-    },
-    {
-      symbol: "NVDA",
-      name: "엔비디아",
-      price: "$456.23",
-      change: "+3.2%",
-      changeAmount: "+$14.15",
-      logo: "🎮",
-    },
-  ];
+  const {setIsEnding} = useDateStore();
+  
 
-  const currentProfile = profiles.find((p) => p.id === selectedProfile);
+  const isHistorical = !isRealtime;
 
-  const handleProfileSelect = (profileId) => {
-    setSelectedProfile(profileId);
-    setTimeout(() => setIsProfileModalOpen(false), 200);
-  };
-
-  const handleCreateProfile = () => {
-    // Character 페이지로 이동
-    navigate("/character");
-  };
-
-  const addNewProfile = (newProfileData) => {
-    const newProfile = {
-      id: `PROFILE_${Date.now()}`, // 고유 ID 생성
-      name: newProfileData.nickname,
-      subtitle: `TimeLine : ${newProfileData.timeline}`,
-      balance: "$0.00", // 초기 잔고
-      totalAssets: "$0.00",
-      totalInvested: "$0.00",
+  const simDate = useMemo(() => {
+    if (!isHistorical) return null;
+    const d = new Date(currentDate || selectedProfile?.processDate);
+    if (Number.isNaN(d.getTime())) return null;
+    return {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate(),
     };
+  }, [isHistorical, currentDate, selectedProfile?.processDate]);
 
-    setProfiles((prev) => [...prev, newProfile]);
-    setSelectedProfile(newProfile.id); // 새로 생성된 프로필을 선택
-  };
+  const dateKey = useMemo(() => {
+    if (!isHistorical) return null;
+    const y = String(simDate?.year || "");
+    const m = String(simDate?.month || "").padStart(2, "0");
+    const d = String(simDate?.day || "").padStart(2, "0");
+    if (!y || !m || !d) return null;
+    return `${y}-${m}-${d}`;
+  }, [isHistorical, simDate?.year, simDate?.month, simDate?.day]);
 
-  // localStorage에서 새 프로필 확인
+  // 과거 모드 관련 상태
+  const [histTop, setHistTop] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [histError, setHistError] = useState(null);
+  const [histCache, setHistCache] = useState({});
+  const [topFilter, setTopFilter] = useState("rising");
+
+  // 포트폴리오 메트릭스 계산
+  const portfolioMetrics = useMemo(() => {
+    const totalCurrent =
+      (selectedProfile?.cashBalance || 0) +
+      (selectedProfile?.totalInvested || 0);
+    const totalInitial = selectedProfile?.seedMoney || 0;
+    const investmentPL =
+      (selectedProfile?.totalInvested || 0) - (startInvested || 0);
+    const overallPL = totalCurrent - totalInitial;
+
+    return {
+      totalCurrent,
+      totalInitial,
+      overallPL,
+      overallPLPercent: totalInitial > 0 ? (overallPL / totalInitial) * 100 : 0,
+      investmentPL,
+      investmentPLPercent:
+        startInvested > 0 ? (investmentPL / startInvested) * 100 : 0,
+    };
+  }, [selectedProfile, startInvested]);
+
+  // 엔딩 팝업 중복 방지용: 현재 processDate 기준 1회만 표시
+  const endingCheckRef = useRef(false);
+
   useEffect(() => {
-    const checkForNewProfile = () => {
-      const newProfileData = localStorage.getItem("newProfile");
-      if (newProfileData) {
-        const profileData = JSON.parse(newProfileData);
-        addNewProfile(profileData);
-        localStorage.removeItem("newProfile"); // 사용 후 제거
+    if (!endingCheckRef.current) {
+      try {
+        const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+        const endingDate = profile.timelineTo ? new Date(profile.timelineTo) : null;
+        const procDate = profile.processDate ? String(profile.processDate) : null;
+        const isRealTime = profile.name === "실시간" || profile?.timelineId === 9;
+        const shownKey = procDate ? `endingShown:${procDate}` : null;
+
+        if (!isRealTime && endingDate && procDate) {
+          const current = new Date(procDate + "T00:00:00");
+          const alreadyShown = shownKey ? localStorage.getItem(shownKey) === "1" : false;
+          if (!alreadyShown && endingDate.getTime() < current.getTime()) {
+            setIsEnding(true);
+            if (shownKey) localStorage.setItem(shownKey, "1");
+          }
+        }
+      } catch {}
+      endingCheckRef.current = true;
+    }
+
+    if (!isHistorical || !dateKey) {
+    setHistTop([]);
+    setHistLoading(false);
+    setHistError(null);
+    return;
+    }
+
+    const cachedForDate = histCache[dateKey] || {};
+    if (cachedForDate[topFilter]) {
+      setHistTop(cachedForDate[topFilter]);
+      setHistLoading(false);
+      return;
+    }
+
+    const sortParam =
+      topFilter === "rising"
+        ? "changePercent,desc"
+        : topFilter === "falling"
+          ? "changePercent,asc"
+          : "volume,desc";
+
+    const run = async () => {
+      setHistLoading(true);
+      setHistError(null);
+      try {
+        const resp = await axiosInstance.get("/db/snapshot", {
+          params: { date: dateKey, page: 1, size: 3, sort: sortParam, filterLowPrice: true },
+        });
+        const rows = Array.isArray(resp?.data?.rows) ? resp.data.rows : [];
+        setHistTop(rows);
+        setHistCache((prev) => ({
+          ...prev,
+          [dateKey]: { ...(prev[dateKey] || {}), [topFilter]: rows },
+        }));
+      } catch {
+        setHistTop([]);
+        setHistError("과거 데이터 계산 실패");
+      } finally {
+        setHistLoading(false);
       }
     };
+    run();
+  }, [isHistorical, dateKey, topFilter, histCache]);
 
-    checkForNewProfile();
-  }, []);
+  useConfirmLogin(null);
+  // 초기 프로필 로드 (email / lastProfileId 가 유효할 때만 호출)
 
-  // const toggleFavorite = (stockSymbol) => {
-  //   setFavoriteStocks((prev) => {
-  //     const newFavorites = new Set(prev);
-  //     if (newFavorites.has(stockSymbol)) {
-  //       newFavorites.delete(stockSymbol);
-  //     } else {
-  //       newFavorites.add(stockSymbol);
-  //     }
-  //     return newFavorites;
-  //   });
-  // };
+
+  // 모든 프로필 불러오기
+  const fetchProfiles = useCallback(async () => {
+    if (!email || String(email).trim() === "") return [];
+    try {
+      const response = await axiosInstance.get(
+        `userprofile/profiles/${encodeURIComponent(email)}`,
+        { withCredentials: true }
+      );
+      const list = response.data || [];
+      setProfiles(list);
+      return list;
+    } catch (error) {
+      console.error("Error fetching profiles:", error);
+      return [];
+    }
+  }, [email]);
+
+  const fetchStocks = useCallback(async () => {
+    if (!email || String(email).trim() === "") return 0;
+    const isoDate =
+      currentDate instanceof Date
+        ? currentDate.toISOString().slice(0, 10)
+        : currentDate;
+    try {
+      const response = await axiosInstance.get(
+        `holdings/stocks/${lastProfileId}/${isoDate}`,
+        { withCredentials: true }
+      );
+      const stockList = response.data.holdingsResponseDTOS || [];
+      setHoldingStocks(stockList);
+      return response.data.totalCurrentPrice || 0;
+    } catch (error) {
+      console.error("Error fetching stocks:", error);
+      return 0;
+    }
+  }, [email, lastProfileId, currentDate]);
+
+  const handleProfileSelect = (profile) => {
+    axiosInstance
+      .post(
+        `userprofile/select`,
+        { userProfileId: profile.id, email: email },
+        { withCredentials: true }
+      )
+      .then((res) => {
+        console.log("프로필 선택 성공:", res.data.id);
+        setSelectedProfile(profile);
+        useLoginStore.setState({ lastProfileId: profile.id });
+        try {
+          localStorage.setItem("newProfile", JSON.stringify(profile));
+          if (profile?.processDate) setCurrentDate(profile.processDate);
+        } catch {
+          /* ignore */
+        }
+        setTimeout(() => setIsProfileModalOpen(false), 200);
+      });
+  };
+
+  // TOP3 주식 계산
+  const topRisingStocks = useMemo(() => {
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(
+        String(val || "")
+          .replace("%", "")
+          .replace("+", "")
+      );
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    const toPrice = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    return stocks
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+      }))
+      .filter((s) => toPrice(s.price) >= 1)
+      .filter((s) => s.changePercent && toPct(s.changePercent) !== -Infinity)
+      .sort((a, b) => toPct(b.changePercent) - toPct(a.changePercent))
+      .slice(0, 3);
+  }, [stocks]);
+
+  // 하락률 상위(절대값 기준 하락 큰 것) 3개
+  const topFallingStocks = useMemo(() => {
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toPct = (val) => {
+      const n = parseFloat(
+        String(val || "")
+          .replace("%", "")
+          .replace("+", "")
+      );
+      return Number.isFinite(n) ? n : Infinity;
+    };
+    const toPrice = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    return stocks
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+      }))
+      .filter((s) => toPrice(s.price) >= 1)
+      .filter((s) => s.changePercent && toPct(s.changePercent) !== Infinity)
+      .sort((a, b) => toPct(a.changePercent) - toPct(b.changePercent))
+      .slice(0, 3);
+  }, [stocks]);
+
+  const topVolumeStocks = useMemo(() => {
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
+    const toNum = (val) => {
+      const n = parseFloat(String(val || "").replace(/[^0-9.-]/g, ""));
+      return Number.isFinite(n) ? n : -Infinity;
+    };
+    return stocks
+      .map((s) => ({
+        ...s,
+        price: String(s?.price ?? ""),
+        change: String(s?.change ?? ""),
+        changePercent: String(s?.changePercent ?? ""),
+        volume: String(s?.volume ?? "0"),
+      }))
+      .sort((a, b) => toNum(b.volume) - toNum(a.volume))
+      .slice(0, 3);
+  }, [stocks]);
+
+  // 실시간 모드에서 선택된 TOP3 리스트
+  const selectedRtList = useMemo(() => {
+    switch (topFilter) {
+      case "falling":
+        return topFallingStocks;
+      case "volume":
+        return topVolumeStocks;
+      case "rising":
+      default:
+        return topRisingStocks;
+    }
+  }, [topFilter, topRisingStocks, topFallingStocks, topVolumeStocks]);
+
+  const handleCreateProfile = () => {
+    navigate("/character");
+  };
+  const loadProfile = useCallback(async () => {
+    try {
+      const list = await fetchProfiles();
+      const totalCurrentPrice = await fetchStocks();
+      // 프로필이 하나도 없으면 캐릭터 생성 화면으로 이동
+      if (!Array.isArray(list) || list.length === 0) {
+        navigate("/character");
+        return;
+      }
+      // lastProfileId 가 유효하면 해당 프로필 조회, 아니면 첫 번째 프로필로 세팅
+      if (lastProfileId && Number(lastProfileId) > 0) {
+        try {
+          const response = await axiosInstance.get(
+            `userprofile/profile/${lastProfileId}`,
+            { withCredentials: true }
+          );
+          setStartInvested(response.data.totalInvested || 0);
+          setSelectedProfile({
+            ...response.data,
+            totalInvested: totalCurrentPrice || 0,
+          });
+          localStorage.setItem("newProfile", JSON.stringify(response.data));
+          setCurrentDate(response.data.processDate);
+        } catch (e) {
+          console.error("Error fetching active profile:", e);
+          if (Array.isArray(list) && list.length > 0)
+            setSelectedProfile(list[0]);
+        }
+      } else if (Array.isArray(list) && list.length > 0) {
+        setSelectedProfile(list[0]);
+      }
+    } catch (error) {
+      console.error("Error loading profiles:", error);
+    }
+  }, [
+    lastProfileId,
+    fetchProfiles,
+    fetchStocks,
+    setCurrentDate,
+    startInvested,
+  ]);
+
+  
+  useEffect(() => {
+    if (!email || String(email).trim() === "") return;
+    loadProfile();
+  }, [email, lastProfileId, currentDate, loadProfile]);
 
   return (
-    <div className="h-full">
+    <div className="h-full pt-2">
       {/* 전체 콘텐츠 영역 */}
 
-      {/* 자산 정보 섹션 (다크 배경) */}
-      <div className="bg-slate-950 mx-4 rounded-xl p-1 mb-4">
-        {/* 프로필명 */}
-        <div className="mb-4">
-          <div
-            className="flex items-center gap-2 cursor-pointer"
-            onClick={() => setIsProfileModalOpen(true)}
-          >
-            <div className="w-3 h-3 bg-slate-400 rounded-full animate-pulse"></div>
-            <h2 className="text-white text-lg font-semibold">
-              {currentProfile?.name}
-            </h2>
-            <span className="text-gray-400 text-sm">
-              {currentProfile?.subtitle}
-            </span>
-          </div>
-        </div>
+      
+        {/* 커스텀 CSS 스타일 추가 */}
+        <style jsx>{shimmerStyles}</style>
 
-        {/* 총 잔고 */}
-        <div className="mb-4">
-          <h3 className="text-white text-3xl font-bold">
-            {currentProfile?.balance}
-          </h3>
-          <p className="text-blue-400 text-sm">-$233.76 (10.3%)</p>
-        </div>
-
-        {/* 투자/현금 정보 */}
-        <div className="flex justify-between mb-4">
-          <div>
-            <p className="text-gray-400 text-xs mb-1">투자</p>
-            <p className="text-white text-lg font-semibold">
-              {currentProfile?.totalAssets}
-            </p>
-          </div>
-          <div>
-            <p className="text-gray-400 text-xs mb-1">현금</p>
-            <p className="text-white text-lg font-semibold">
-              {currentProfile?.totalInvested}
-            </p>
-          </div>
-        </div>
-
-        {/* 주문 내역 */}
-        <div className="flex items-center justify-between">
-          <span className="text-white text-sm">주문 내역</span>
-          <ChevronRight className="w-4 h-4 text-white" />
-        </div>
-      </div>
-
-      {/* 보유 주식 섹션 */}
-      <div className="bg-slate-950 px-4 py-2">
-        <div className="bg-slate-800 rounded-xl p-3">
-          <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
-          <div className="space-y-2">
-            {stocks.map((stock, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
-                  </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">
-                      {stock.name}
-                    </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-white font-semibold text-sm">
-                    {stock.price}
-                  </p>
-                  <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                  >
-                    {stock.change}
-                  </p>
+        {/* 자산 정보 섹션 */}
+        <div className="bg-slate-950 mx-4 rounded-xl mb-5">
+          {!selectedProfile?.id || selectedProfile?.id === 0 ? (
+            // Shimmer 스켈레톤 UI
+            <div>
+              {/* 프로필명 스켈레톤 */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2">
+                  <ShimmerSkeleton className="w-3 h-3 rounded-full" />
+                  <ShimmerSkeleton className="h-5 w-32" />
+                  <ShimmerSkeleton className="h-4 w-24" />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 실시간 급상승 종목 섹션 */}
-      <div className="bg-slate-950 px-4 py-2">
-        <div className="bg-slate-800 rounded-xl p-3">
-          <h3 className="text-white text-lg font-semibold mb-3">
-            실시간 급상승 종목
-          </h3>
-          <div className="space-y-2">
-            {stocks.slice(0, 3).map((stock, index) => (
-              <div
-                key={`trending-${index}`}
-                className="flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {stock.logo}
-                  </div>
-                  <div>
-                    <h4 className="text-white font-medium text-sm">
-                      {stock.name}
-                    </h4>
-                    <p className="text-gray-400 text-xs">{stock.symbol}</p>
-                  </div>
+              {/* 총 잔고 스켈레톤 */}
+              <div className="mb-4">
+                <ShimmerSkeleton className="h-9 w-40 mb-2" />
+                <ShimmerSkeleton className="h-4 w-32" />
+              </div>
+              {/* 투자/현금 정보 스켈레톤 */}
+              <div className="flex justify-between mb-4">
+                <div>
+                  <ShimmerSkeleton className="h-3 w-8 mb-1" />
+                  <ShimmerSkeleton className="h-6 w-20 mb-1" />
+                  <ShimmerSkeleton className="h-3 w-24" />
                 </div>
-                <div className="text-right">
-                  <p className="text-white font-semibold text-sm">
-                    {stock.price}
-                  </p>
-                  <p
-                    className={`text-xs ${stock.change.includes("+") ? "text-red-500" : "text-gray-400"}`}
-                  >
-                    {stock.change}
-                  </p>
+                <div>
+                  <ShimmerSkeleton className="h-3 w-8 mb-1" />
+                  <ShimmerSkeleton className="h-6 w-20" />
                 </div>
               </div>
-            ))}
-          </div>
-          {/* 더 많은 주식목록보기 버튼 */}
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <button className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-gray-50 rounded-lg transition-colors">
-              더 많은 주식목록보기
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 프로필 선택 모달 */}
-      {isProfileModalOpen && (
-        <div className="absolute inset-0 bg-black bg-opacity-60 z-50 flex items-end">
-          <div
-            className="w-full max-w-md mx-auto bg-slate-900 rounded-t-3xl transform transition-transform duration-300 ease-out"
-            style={{ maxHeight: "600px" }}
-          >
-            {/* 드래그 핸들 */}
-            <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4"></div>
-
-            {/* 모달 헤더 */}
-            <div className="px-6 pb-4 border-b border-slate-700">
+              {/* 주문 내역 스켈레톤 */}
               <div className="flex items-center justify-between">
-                <h3 className="text-white text-xl font-semibold">
-                  프로필 선택
-                </h3>
-                <button
-                  onClick={() => setIsProfileModalOpen(false)}
-                  className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center active:scale-90 transition-transform touch-manipulation"
+                <ShimmerSkeleton className="h-4 w-16" />
+                <ShimmerSkeleton className="w-4 h-4" />
+              </div>
+            </div>
+          ) : (
+            // 실제 데이터
+            <>
+              {/* 프로필명 */}
+              <div className="mb-4">
+                <div
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() => setIsProfileModalOpen(true)}
                 >
-                  <X className="w-5 h-5 text-white" />
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  <h2 className="text-white text-lg font-semibold">
+                    {selectedProfile?.nickname}
+                  </h2>
+                  <span className="text-gray-400 text-sm">
+                    TimeLine : {selectedProfile?.name || "없음"}
+                  </span>
+                </div>
+              </div>
+
+              {/* 총 잔고 */}
+              <div className="mb-4">
+                <h3 className="text-white text-3xl font-bold">
+                  {formatCurrencyValue(portfolioMetrics.totalCurrent)}
+                </h3>
+                {selectedProfile?.totalAssets > 0 && (
+                  <p
+                    className={`text-xs ${getColorClass(portfolioMetrics.overallPL)}`}
+                  >
+                    {formatCurrency(portfolioMetrics.overallPL)} (
+                    {formatPercentage(portfolioMetrics.overallPLPercent)})
+                  </p>
+                )}
+              </div>
+
+              {/* 투자/현금 정보 */}
+              <div className="flex justify-between mb-4">
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">투자</p>
+                  <p className="text-white text-lg font-semibold">
+                    {formatCurrencyValue(selectedProfile?.totalInvested)}
+                  </p>
+                  <p
+                    className={`text-xs ${getColorClass(portfolioMetrics.investmentPL)}`}
+                  >
+                    {formatCurrency(portfolioMetrics.investmentPL)} (
+                    {formatPercentage(portfolioMetrics.investmentPLPercent)})
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">현금</p>
+                  <p className="text-white text-lg font-semibold">
+                    {formatCurrencyValue(selectedProfile?.cashBalance)}
+                  </p>
+                </div>
+              </div>
+
+              {/* 주문 내역 */}
+              <div
+                className="flex items-center justify-between cursor-pointer hover:bg-slate-700 rounded-lg p-2 transition-colors"
+                onClick={() => navigate("/orderhistory")}
+              >
+                <span className="text-white text-sm">주문 내역</span>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 보유 주식 섹션 */}
+        <div className="bg-slate-950 px-4 py-2">
+          <div className="bg-slate-800 rounded-xl p-3">
+            <h3 className="text-white text-lg font-semibold mb-3">보유 주식</h3>
+            {
+            holdingStocks.length === 0 ?
+            (
+                <div className="space-y-2">
+                 <p className="text-gray-400 text-sm font-semibold=">보유한 주식이 없습니다.</p>
+              </div>
+            ) :
+            !selectedProfile?.id ||
+            selectedProfile?.id === 0  ? (
+              // Shimmer 스켈레톤 UI
+              <div className="space-y-2">
+                {[...Array(3)].map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
+                      <div>
+                        <ShimmerSkeleton className="h-4 w-20 mb-1" />
+                        <ShimmerSkeleton className="h-3 w-12" />
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <ShimmerSkeleton className="h-3 w-8 mb-2" />
+                      <ShimmerSkeleton className="h-4 w-16 mb-1" />
+                      <ShimmerSkeleton className="h-3 w-20" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-hide pr-1">
+                {holdingStocks
+                  .filter((stock) => stock.quantity && stock.quantity > 0)
+                  .map((stock, index) => (
+                    <button
+                      className="w-full"
+                      onClick={() => navigate(`/stocks/${stock.ticker}`)}
+                    >
+                      {" "}
+                      <div
+                        key={index}
+                        className="flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
+                            <img
+                              src={stock.logo}
+                              alt={stock.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <span className="text-gray-600 font-bold text-xs hidden">
+                              {stock.ticker}
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium text-sm truncate max-w-[180px]">
+                              {stock.name}
+                            </h4>
+                            <p className="text-gray-400 text-xs text-start">
+                              {stock.ticker}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-white font-semibold text-[10px] mb-2">
+                            {(stock.quantity || 0).toLocaleString("en-US")}주
+                          </p>
+                          <p className="text-white font-semibold text-sm">
+                            {formatCurrencyValue(stock.price)}
+                          </p>
+                          {(() => {
+                            try {
+                              const profile = JSON.parse(localStorage.getItem("newProfile") || "{}");
+                              const todayKey = String(profile?.processDate || "");
+                              const bought = JSON.parse(localStorage.getItem(`boughtToday:${todayKey}`) || "[]");
+                              const isNewBuy = bought.includes(stock.ticker);
+                              if (isNewBuy) {
+                                return (
+                                  <p className={`text-xs ${getDeltaClass(0, 0)}`}>
+                                    {formatCurrency(0)} ({formatPercentage(0)})
+                                  </p>
+                                );
+                              }
+                            } catch (_) {}
+                            return (
+                              <p className={`text-xs ${getDeltaClass(stock.changeAmount, stock.change)}`}>
+                                {formatCurrency(stock.changeAmount)} ({formatPercentage(stock.change)})
+                              </p>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* TOP3 섹션 */}
+        <div className="bg-slate-950 px-4 py-2">
+          <div className="bg-slate-800 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-white text-lg font-semibold">
+                {topFilter === "rising"
+                  ? "상승률 TOP3"
+                  : topFilter === "falling"
+                    ? "하락률 TOP3"
+                    : "거래량 TOP3"}
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTopFilter("rising")}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === "rising"
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  상승률
+                </button>
+                <button
+                  onClick={() => setTopFilter("falling")}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === "falling"
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  하락률
+                </button>
+                <button
+                  onClick={() => setTopFilter("volume")}
+                  className={`px-2 py-1 rounded-md text-xs font-medium ${
+                    topFilter === "volume"
+                      ? "bg-red-500 text-white"
+                      : "bg-slate-700 text-gray-200"
+                  }`}
+                >
+                  거래량
                 </button>
               </div>
             </div>
 
-            {/* 프로필 목록 */}
-            <div
-              className="px-6 py-4 space-y-3 overflow-y-auto"
-              style={{ maxHeight: "400px" }}
-            >
-              {profiles.map((profile) => (
-                <div
-                  key={profile.id}
-                  onClick={() => handleProfileSelect(profile.id)}
-                  className={`
-                    p-4 rounded-2xl border cursor-pointer transition-all duration-200 active:scale-[0.98] touch-manipulation
-                    ${
-                      profile.id === selectedProfile
-                        ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
-                        : "bg-slate-800 border-slate-700"
-                    }
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        {profile.id === selectedProfile && (
-                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                        )}
-                        <h4 className="text-white font-semibold text-base">
-                          {profile.name}
-                        </h4>
-                        {profile.id === selectedProfile && (
-                          <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium">
-                            활성
-                          </span>
-                        )}
+            {(isHistorical ? histLoading : stocksLoading) ? (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ShimmerSkeleton className="w-8 h-8 rounded-lg" />
+                      <div>
+                        <ShimmerSkeleton className="h-4 w-20 mb-1" />
+                        <ShimmerSkeleton className="h-3 w-16" />
                       </div>
-                      <p className="text-gray-400 text-sm mt-1">
-                        {profile.subtitle}
-                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-white font-semibold text-base">
-                        {profile.balance}
-                      </p>
-                      <p className="text-gray-400 text-xs">총자산</p>
+                      <ShimmerSkeleton className="h-4 w-16 mb-1" />
+                      <ShimmerSkeleton className="h-3 w-12" />
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (isHistorical ? histError : stocksError) ? (
+              <div className="text-center py-4">
+                <p className="text-red-400 text-sm">
+                  {isHistorical ? histError : stocksError}
+                </p>
+              </div>
+            ) : (
+                isHistorical
+                  ? histTop.length === 0
+                  : selectedRtList.length === 0
+              ) ? (
+              <div className="text-center py-4">
+                <p className="text-gray-400 text-sm">
+                  {isHistorical
+                    ? "데이터를 불러올 수 없습니다"
+                    : "실시간 데이터 준비중"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {(isHistorical ? histTop : selectedRtList).map(
+                  (stock, index) => (
+                    <div
+                      key={`trending-${stock.symbol}-${index}`}
+                      className="flex items-center justify-between cursor-pointer hover:bg-slate-700/30 rounded-lg"
+                      onClick={() =>
+                        navigate(
+                          `/stocks/${encodeURIComponent(String(stock.symbol || ""))}`
+                        )
+                      }
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-gray-100 rounded-[5px] flex items-center justify-center text-sm overflow-hidden">
+                          <img
+                            src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+                            alt={stock.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                              e.target.nextSibling.style.display = "flex";
+                            }}
+                          />
+                          <span className="text-gray-600 font-bold text-xs hidden">
+                            {stock.symbol}
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="text-white font-medium text-sm">
+                            {stock.name}
+                          </h4>
+                          <p className="text-gray-400 text-xs">
+                            {stock.symbol}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {/* 1줄: 가격 */}
+                        <p className="text-white font-semibold text-sm">
+                          {formatCurrencyValue(stock.price)}
+                        </p>
 
-            {/* 새 프로필 추가 버튼 */}
-            <div className="px-6 py-4 border-t border-slate-700">
+                        {/* 2줄: 변동값 + 퍼센트 */}
+                        <p className="text-xs font-medium">
+                          <span
+                            className={getColorClass(
+                              parseNumericValue(stock.change)
+                            )}
+                          >
+                            {formatCurrency(stock.change)}
+                          </span>
+                          <span
+                            className={getColorClass(
+                              parseNumericValue(stock.changePercent)
+                            )}
+                          >
+                            ({formatPercentage(stock.changePercent)})
+                          </span>
+                        </p>
+
+                        {/* 3줄: 거래량 */}
+                        {topFilter === "volume" && (
+                          <p className="text-xs text-gray-400">
+                            거래량: {formatVolume(stock.volume)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            <div className="mt-3 pt-3 border-t border-slate-600">
               <button
-                onClick={handleCreateProfile}
-                className="w-full p-4 bg-slate-800 rounded-2xl border border-slate-600 border-dashed text-gray-400 font-medium active:scale-[0.98] transition-all touch-manipulation"
+                onClick={() => navigate("/stocks")}
+                className="w-full py-2 text-center text-red-500 text-sm font-medium hover:bg-slate-700 rounded-lg transition-colors"
               >
-                + 새 프로필 추가
+                더 많은 주식목록보기
               </button>
             </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* 프로필 선택 모달 */}
+        {isProfileModalOpen && (
+          <div className="absolute inset-0 bg-black bg-opacity-60 z-50 flex items-end">
+            <div
+              className="w-full max-w-md mx-auto bg-slate-900 rounded-t-3xl transform transition-transform duration-300 ease-out"
+              style={{ maxHeight: "600px" }}
+            >
+              <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4"></div>
+
+              <div className="px-6 pb-4 border-b border-slate-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white text-xl font-semibold">
+                    프로필 선택
+                  </h3>
+                  <button
+                    onClick={() => setIsProfileModalOpen(false)}
+                    className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center active:scale-90 transition-transform touch-manipulation"
+                  >
+                    <X className="w-5 h-5 text-white" />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                className="px-6 py-4 space-y-3 overflow-y-auto scrollbar-hide"
+                style={{ maxHeight: "400px" }}
+              >
+                {profiles.map((profile) => (
+                  <div
+                    key={profile.id}
+                    onClick={() => handleProfileSelect(profile)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 ${
+                      profile.id === selectedProfile.id
+                        ? "bg-red-500 bg-opacity-10 border-red-500 border-opacity-50"
+                        : "bg-slate-800 border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          {profile.id === selectedProfile.id && (
+                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                          )}
+                          <h4 className="text-white font-semibold text-base">
+                            {profile.nickname}
+                          </h4>
+                          {profile.id === selectedProfile.id && (
+                            <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full font-medium">
+                              활성
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-sm mt-1">
+                          {profile.name}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-white font-semibold text-base">
+                          {formatCurrencyValue(profile.cashBalance)}
+                        </p>
+
+                        <p className="text-gray-400 text-xs">총자산</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="px-6 py-4 border-t border-slate-700">
+                <button
+                  onClick={handleCreateProfile}
+                  className="w-full p-4 bg-slate-800 rounded-2xl border border-slate-600 border-dashed text-gray-400 font-medium active:scale-[0.98] transition-all touch-manipulation"
+                >
+                  + 새 프로필 추가
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
   );
 };
 

@@ -1,14 +1,26 @@
 import React from "react";
 import { Heart } from "lucide-react";
 
-const StockListItem = ({ stock, isFavorite, onToggleFavorite }) => {
+// StockListItem 컴포넌트
+export const StockListItem = ({ stock, isFavorite, onToggleFavorite }) => {
   const isPositive = stock.change.includes("+");
 
   return (
     <div className="flex items-center justify-between p-3 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors duration-200 cursor-pointer group">
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl flex items-center justify-center text-xl shadow-lg group-hover:scale-105 transition-transform duration-200">
-          {stock.logo}
+        <div className="w-12 h-12 bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl flex items-center justify-center text-xl shadow-lg group-hover:scale-105 transition-transform duration-200 overflow-hidden">
+          <img
+            src={`https://financialmodelingprep.com/image-stock/${stock.symbol}.png`}
+            alt={stock.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.style.display = "none";
+              e.target.nextSibling.style.display = "flex";
+            }}
+          />
+          <span className="text-white font-bold text-sm hidden">
+            {stock.symbol}
+          </span>
         </div>
         <div>
           <h4 className="text-white font-semibold text-sm">{stock.name}</h4>
@@ -46,5 +58,3 @@ const StockListItem = ({ stock, isFavorite, onToggleFavorite }) => {
     </div>
   );
 };
-
-export default StockListItem;

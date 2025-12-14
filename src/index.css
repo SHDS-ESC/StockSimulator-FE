@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -29,8 +31,18 @@
 :root {
   margin: 0;
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu",
-    "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    "IBM Plex Sans KR",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Roboto",
+    "Oxygen",
+    "Ubuntu",
+    "Cantarell",
+    "Fira Sans",
+    "Droid Sans",
+    "Helvetica Neue",
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #1e293b;
@@ -40,7 +52,14 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE, Edge */
+  scrollbar-width: none; /* Firefox */
+}
 
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
 .hide-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
@@ -137,4 +156,209 @@ button:focus-visible {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* =========================== */
+/* 애니메이션 배경 키프레임 */
+/* =========================== */
+@keyframes gridMove {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(50px, 50px);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+@keyframes lineMove {
+  0% {
+    left: -200px;
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes chartMove {
+  0% {
+    left: -300px;
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.6;
+  }
+}
+
+@keyframes drawPath {
+  0% {
+    stroke-dashoffset: 100;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes dataPoint {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+}
+
+/* =========================== */
+/* 거래 페이지 전용 스타일 */
+/* =========================== */
+
+/* Layout */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.row.wrap {
+  flex-wrap: wrap;
+}
+
+/* Card */
+.card {
+  background: var(--panel, #0f172a);
+  border: 1px solid var(--border, #22304b);
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--text, #e2e8f0);
+}
+
+/* Buttons */
+.btn {
+  background: var(--btn-bg, #1e293b);
+  border: 1px solid var(--border, #22304b);
+  color: var(--text, #f1f5f9);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn.brand {
+  background: var(--brand, #3b82f6);
+  border-color: transparent;
+  color: #fff;
+}
+
+/* Inputs */
+.field {
+  background: #0b1220;
+  border: 1px solid var(--border, #22304b);
+  color: var(--text, #e2e8f0);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+.field::placeholder {
+  color: #94a3b8;
+}
+
+/* Number input 스피너 제거 (가운데 정렬 시 시각적 밀림 방지) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Text */
+.muted {
+  color: var(--muted, #94a3b8);
+}
+
+/* Table */
+.table-head,
+.table-row {
+  display: grid;
+  grid-template-columns: 120px 1fr 180px 160px 64px;
+  gap: 10px;
+  align-items: center;
+}
+.table-head {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #1b2230);
+  font-weight: 700;
+}
+.table-row {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+/* Segmented control */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  background: var(--btn-bg, #1e293b);
+  border: 1px solid var(--border, #22304b);
+  border-radius: 999px;
+  padding: 2px;
+}
+.seg .seg-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text, #e6ebf5);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.seg .seg-btn.active {
+  background: var(--brand, #4f87ff);
+  color: #fff;
 }

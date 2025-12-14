@@ -12,7 +12,7 @@ node_modules
 bower_components
 
 # Build output
-dist
+# dist
 dist-ssr
 .cache
 .tmp
